@@ -38,7 +38,7 @@ def build_html(data):
 
     summary_html = f"""
         <div class="summary{' warn' if data.get('incomplete_warning') else ''}">
-          {'⚠ ' if data.get('incomplete_warning') else '📌 '}{data.get('summary', '')}
+          {'[경고] ' if data.get('incomplete_warning') else '[안내] '}{data.get('summary', '')}
         </div>"""
 
     # 주간 매출 추이 (최근 3주)
