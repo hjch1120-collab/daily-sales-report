@@ -31,10 +31,17 @@ def ensure_chromium():
         return True
     except Exception:
         with st.spinner("최초 실행 준비 중입니다 (1~2분 정도 걸려요)..."):
-            subprocess.run(
-                [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"],
-                check=True,
+            result = subprocess.run(
+                [sys.executable, "-m", "playwright", "install", "chromium"],
+                capture_output=True,
+                text=True,
             )
+            if result.returncode != 0:
+                st.error(
+                    "Chromium 설치에 실패했습니다. 아래 로그를 확인해주세요.\n\n"
+                    f"stdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+                )
+                st.stop()
         return True
 
 
