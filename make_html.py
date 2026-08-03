@@ -146,7 +146,7 @@ def build_html(data):
   @page {{ size: A4; margin: 0; }}
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
-    font-family: 'Noto Sans CJK KR', sans-serif;
+    font-family: 'Noto Sans CJK KR', 'Noto Sans KR', 'NanumGothic', sans-serif;
     width: 210mm;
     color: #1a1a2e;
     background: #ffffff;
