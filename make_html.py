@@ -252,7 +252,7 @@ def build_html(data):
 
   <div class="header">
     <div>
-      <h1>일일 판매 보고서</h1>
+      <h1>포쿨_온라인팀_일일보고서</h1>
       <div class="sub">주문일자 기준 · {d['date']} ({d['weekday']}요일)</div>
     </div>
     <div class="date-badge">{d['send_date']}</div>
