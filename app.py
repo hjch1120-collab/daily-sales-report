@@ -12,7 +12,7 @@ from extract_raw import extract, KEEP_COLS
 from build_report import build, MONTHLY_TARGETS
 from make_html import build_html
 
-st.set_page_config(page_title="일일 판매 보고서", page_icon="📊", layout="centered")
+st.set_page_config(page_title="포쿨_온라인팀_일일보고서", page_icon="📊", layout="centered")
 
 WORKDIR = Path("/tmp/daily_report_app")
 WORKDIR.mkdir(exist_ok=True)
@@ -87,7 +87,7 @@ def build_share_text(data: dict) -> str:
         return f"{'+' if p > 0 else ''}{p}%"
 
     lines = [
-        f"[일일 판매 보고서 {d['date'][5:].replace('-', '/')}] "
+        f"[포쿨_온라인팀_일일보고서 {d['date'][5:].replace('-', '/')}] "
         f"{d['date']} 매출 {d['revenue']:,}원 (전일 {pct_str(d['revenue_pct'])}), "
         f"주간 누적 {w['revenue']:,}원 (전주 {pct_str(w['revenue_pct'])})"
     ]
@@ -116,7 +116,7 @@ def build_share_text(data: dict) -> str:
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
-st.title("📊 일일 판매 보고서")
+st.title("📊 포쿨_온라인팀_일일보고서")
 st.caption("RAW 엑셀 또는 1차가공 CSV를 올리면 A4 PDF 보고서를 바로 만들어줍니다.")
 
 file_kind = st.radio(
