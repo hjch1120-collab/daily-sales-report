@@ -1,12 +1,10 @@
 import json
 
+
 def krw(n):
     n = int(round(n))
     return f"{n:,}원"
 
-def krw_k(n):
-    n = int(round(n / 1000))
-    return f"{n:,}천원"
 
 def pct_badge(p):
     if p is None:
@@ -16,127 +14,120 @@ def pct_badge(p):
     arrow = '▲' if p > 0 else ('▼' if p < 0 else '·')
     return f'<span class="badge {cls}">{arrow} {sign}{p}%</span>'
 
-def diff_badge(n):
-    n = int(round(n))
-    cls = 'up' if n > 0 else ('down' if n < 0 else 'flat')
-    sign = '+' if n > 0 else ''
-    arrow = '▲' if n > 0 else ('▼' if n < 0 else '·')
-    return f'<span class="badge {cls}">{arrow} {sign}{n:,}원</span>'
+
+def sparkline_svg(values, color):
+    """급증/급감 표용 짧은 스파크라인 (8일)"""
+    w, h, pad = 60, 18, 2
+    n = len(values)
+    maxv = max(values) if max(values) > 0 else 1
+    step = (w - 2 * pad) / (n - 1)
+    pts = []
+    for i, v in enumerate(values):
+        x = pad + i * step
+        y = h - pad - (v / maxv) * (h - 2 * pad)
+        pts.append((x, y))
+    path = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    last_x, last_y = pts[-1]
+    return (f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
+            f'<polyline points="{path}" fill="none" stroke="{color}" stroke-width="1.3" '
+            f'stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/>'
+            f'<circle cx="{last_x:.1f}" cy="{last_y:.1f}" r="2" fill="{color}"/></svg>')
+
+
+def sparkline_svg_long(values, baseline, color, w=200, h=26, pad=2):
+    """관리모델용 60일 추세 + 기준평균 점선"""
+    n = len(values)
+    maxv = max(max(values), baseline) if max(max(values), baseline) > 0 else 1
+    step = (w - 2 * pad) / (n - 1)
+    pts = []
+    for i, v in enumerate(values):
+        x = pad + i * step
+        y = h - pad - (v / maxv) * (h - 2 * pad)
+        pts.append((x, y))
+    path = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    last_x, last_y = pts[-1]
+    area = f"{pad},{h - pad} " + path + f" {last_x:.1f},{h - pad}"
+    base_y = h - pad - (baseline / maxv) * (h - 2 * pad)
+    return (f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
+            f'<polygon points="{area}" fill="{color}" opacity="0.08"/>'
+            f'<line x1="{pad}" y1="{base_y:.1f}" x2="{w - pad}" y2="{base_y:.1f}" '
+            f'stroke="#999" stroke-width="0.8" stroke-dasharray="2.5,1.8"/>'
+            f'<polyline points="{path}" fill="none" stroke="{color}" stroke-width="1.1" '
+            f'stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/>'
+            f'<circle cx="{last_x:.1f}" cy="{last_y:.1f}" r="1.8" fill="{color}"/></svg>')
+
 
 def build_html(data):
     d = data['daily']
-    w = data['weekly']
+    wt = data['weekly_trend']
     mo = data['monthly']
+    manage_models = data.get('manage_models', [])
+    new_sale = data.get('new_sale', {'silent_60': [], 'gap_30': []})
+    spikes = data.get('spikes', [])
+    drops = data.get('drops', [])
+    wd_name = data.get('baseline_wd_name', '')
+    occurrences = data.get('baseline_occurrences', 0)
+    manage_names = {m['원품명'] for m in manage_models}
 
     bm = d.get('best_model')
     if bm:
-        best_model_html = f"""
-      <div class="value model-name">{bm['원품명']}</div>
-      <div class="meta">{bm['수량']:,}개 &nbsp;·&nbsp; {krw(bm['매출액'])}</div>"""
+        best_model_html = (f'<div class="value model-name">{bm["원품명"]}</div>'
+                            f'<div class="meta">{bm["수량"]:,}개 · {krw(bm["매출액"])}</div>')
     else:
-        best_model_html = """<div class="value model-name">-</div><div class="meta">기준일 판매 데이터 없음</div>"""
+        best_model_html = '<div class="value model-name">-</div><div class="meta">기준일 판매 데이터 없음</div>'
 
-    summary_html = f"""
-        <div class="summary{' warn' if data.get('incomplete_warning') else ''}">
-          {'[경고] ' if data.get('incomplete_warning') else '[안내] '}{data.get('summary', '')}
-        </div>"""
-
-    # 주간 매출 추이 (최근 3주)
     wt_rows = ""
-    for wt in data.get('weekly_trend', []):
-        row_cls = ' class="current-week"' if wt.get('is_current') else ''
-        wt_rows += f"""<tr{row_cls}><td class="name">{wt['range']}{' (이번주)' if wt.get('is_current') else ''}</td>
-          <td class="num">{krw(wt['revenue'])}</td>
-          <td class="num">{pct_badge(wt['revenue_pct'])}</td></tr>"""
-    if not data.get('weekly_trend'):
+    for w_ in wt:
+        cls = ' class="current-week"' if w_.get('is_current') else ''
+        wt_rows += (f'<tr{cls}><td class="name">{w_["range"]}{" (이번주)" if w_.get("is_current") else ""}</td>'
+                    f'<td class="num">{krw(w_["revenue"])}</td><td class="num">{pct_badge(w_["revenue_pct"])}</td></tr>')
+    if not wt:
         wt_rows = '<tr><td colspan="3" class="empty">데이터 없음</td></tr>'
 
-    # 월 목표매출 대비 진행률
     if mo.get('target_revenue'):
-        target_html = f"""<div class="meta sub-line">목표매출 {krw(mo['target_revenue'])} 대비 {pct_badge(mo['target_pct'])}</div>"""
+        target_html = f'<div class="meta sub-line">목표매출 {krw(mo["target_revenue"])} 대비 {pct_badge(mo["target_pct"])}</div>'
     else:
         target_html = ""
 
-    # 관리모델 (직전 7일 평균 대비 형식)
-    def ratio_txt(r):
-        return f"{r}배" if r is not None else "신규"
+    def name_cell(name):
+        star = '<span class="mstar">★</span>' if name in manage_names else ''
+        return f'{star}{name}'
 
-    mm_rows = ""
-    for i, m in enumerate(data['manage_models'], 1):
-        r = m['ratio']
-        cls = 'down-text' if (r is not None and r < 1) else 'up-text'
-        mm_rows += f"""<tr><td class="rank">{i}</td><td class="name">{m['원품명']}</td>
-          <td class="num">{m['today_qty']}개</td><td class="num">{m['avg7']}개</td>
-          <td class="num highlight {cls}">{ratio_txt(r)}</td></tr>"""
-    if not data['manage_models']:
-        mm_rows = '<tr><td colspan="5" class="empty">기준일 판매 데이터 없음</td></tr>'
+    # 관리모델
+    manage_rows = ""
+    for m in manage_models:
+        spark = sparkline_svg_long(m['trend60'], m['baseline'], '#7c3aed')
+        diff_v = m['diff']
+        sign = '+' if diff_v > 0 else ''
+        dcls = 'up-text' if diff_v > 0 else ('down-text' if diff_v < 0 else '')
+        pct_txt = f'{"+" if m["diff_pct"] and m["diff_pct"] > 0 else ""}{m["diff_pct"]}%' if m['diff_pct'] is not None else '-'
+        manage_rows += (f'<tr><td class="name">★ {m["원품명"]}</td><td class="spark-cell-long">{spark}</td>'
+                         f'<td class="num base">{m["baseline"]}</td><td class="num today">{m["today_qty"]}</td>'
+                         f'<td class="num diff {dcls}">{sign}{diff_v}</td><td class="num diffpct {dcls}">{pct_txt}</td></tr>')
+    if not manage_models:
+        manage_rows = '<tr><td colspan="6" class="empty">지정된 관리모델 없음</td></tr>'
 
-    # 특이 매출수량 - 급증
-    spike_rows = ""
-    for s in data['spikes']:
-        spike_rows += f"""<tr><td class="name">{s['원품명']}</td>
-          <td class="num">{s['today_qty']}개</td><td class="num">{s['avg7']}개</td>
-          <td class="num highlight up-text">{ratio_txt(s['ratio'])}</td></tr>"""
-    if not data['spikes']:
-        spike_rows = '<tr><td colspan="4" class="empty">직전 7일 평균 대비 특이 급증 모델 없음</td></tr>'
+    silent_60 = new_sale.get('silent_60', [])
+    gap_30 = new_sale.get('gap_30', [])
+    new_sale_total = len(silent_60) + len(gap_30)
+    new_sale_chips = ("".join(f'<span class="chip chip-new">{name_cell(n)}</span>' for n in silent_60) +
+                       "".join(f'<span class="chip chip-gap">{name_cell(n)}</span>' for n in gap_30))
+    if not new_sale_chips:
+        new_sale_chips = '<span class="empty">신규 판매 모델 없음</span>'
 
-    # 특이 매출수량 - 급감
-    drop_rows = ""
-    for s in data.get('drops', []):
-        drop_rows += f"""<tr><td class="name">{s['원품명']}</td>
-          <td class="num">{s['today_qty']}개</td><td class="num">{s['avg7']}개</td>
-          <td class="num highlight down-text">{ratio_txt(s['ratio'])}</td></tr>"""
-    if not data.get('drops'):
-        drop_rows = '<tr><td colspan="4" class="empty">직전 7일 평균 대비 특이 급감 모델 없음</td></tr>'
-
-    # 주간/월간 TOP5
-    def top_rows(lst):
+    def build_tier_rows(records, color, cls):
         rows = ""
-        for i, m in enumerate(lst, 1):
-            rows += f"""<tr><td class="rank">{i}</td><td class="name">{m['원품명']}</td>
-              <td class="num">{krw(m['매출액'])}</td></tr>"""
-        return rows or '<tr><td colspan="3" class="empty">데이터 없음</td></tr>'
+        for r in records:
+            spark = sparkline_svg(r['trend8'], color)
+            sign = '+' if r['diff'] > 0 else ''
+            rows += (f'<tr><td class="name">{name_cell(r["원품명"])}</td>'
+                      f'<td class="tier-cell"><span class="tier-badge {cls}">{r["tier"]}순위</span></td>'
+                      f'<td class="spark-cell">{spark}</td><td class="num base">{r["baseline"]}</td>'
+                      f'<td class="num today">{r["today_qty"]}</td><td class="num diff {cls}">{sign}{r["diff"]}</td></tr>')
+        return rows or '<tr><td colspan="6" class="empty">해당 없음</td></tr>'
 
-    week_top_rows = top_rows(data['week_top'])
-    month_top_rows = top_rows(data['month_top'])
-
-    # 채널별 실적
-    ch_rows = ""
-    for c in data['channels']:
-        ch_rows += f"""<tr><td class="name">{c['채널']}</td>
-          <td class="num">{krw(c['매출액'])}</td>
-          <td class="num sub">{krw(c['전일매출'])}</td>
-          <td class="num">{pct_badge(c['pct'])}</td></tr>"""
-    if not data['channels']:
-        ch_rows = '<tr><td colspan="4" class="empty">기준일 채널 매출 없음</td></tr>'
-
-    # 취소 TOP3
-    cancel_rows = ""
-    for i, c in enumerate(data['cancel_top'], 1):
-        cancel_rows += f"""<tr><td class="rank">{i}</td><td class="name">{c['원품명']}</td>
-          <td class="num">{int(c['취소수량']):,}개</td><td class="num">{krw(c['취소금액'])}</td></tr>"""
-    if not data['cancel_top']:
-        cancel_rows = '<tr><td colspan="4" class="empty">당월 취소 데이터 없음</td></tr>'
-
-    # 요일별 평균 매출 vs 최근 실적 (직전 3주 평균, 최근값 자기참조 제외)
-    wd_rows = ""
-    for w_ in data.get('weekday_summary', []):
-        row_cls = ' class="current-week"' if w_.get('is_today') else ''
-        if w_.get('최근매출') is not None:
-            recent_amt = krw_k(w_['최근매출'])
-            recent_date = w_['최근날짜']
-            recent_badge = pct_badge(w_['최근pct'])
-        else:
-            recent_amt = '<span class="dim">-</span>'
-            recent_date = ''
-            recent_badge = ''
-        wd_rows += f"""<tr{row_cls}><td class="name">{w_['요일']}요일{' (기준일)' if w_.get('is_today') else ''}</td>
-          <td class="num">{krw_k(w_['평균매출'])}</td>
-          <td class="num">{recent_amt}</td>
-          <td class="num wd-date-col">{recent_date}</td>
-          <td class="num">{recent_badge}</td></tr>"""
-    if not data.get('weekday_summary'):
-        wd_rows = '<tr><td colspan="5" class="empty">데이터 없음</td></tr>'
+    spike_rows = build_tier_rows(spikes, '#d1372f', 'up-text')
+    drop_rows = build_tier_rows(drops, '#1a6fd1', 'down-text')
 
     html = f"""<!DOCTYPE html>
 <html lang="ko">
@@ -147,104 +138,77 @@ def build_html(data):
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     font-family: 'Noto Sans CJK KR', 'Noto Sans KR', 'NanumGothic', sans-serif;
-    width: 210mm;
-    color: #1a1a2e;
-    background: #ffffff;
-    zoom: 1.3025;
+    width: 210mm; color: #1a1a2e; background: #ffffff; zoom: 1.15;
   }}
   .page {{ width: 210mm; height: 297mm; padding: 12mm 13mm; display: flex; flex-direction: column; }}
 
-  .header {{
-    display: flex; justify-content: space-between; align-items: flex-end;
-    border-bottom: 3px solid #1a1a2e; padding-bottom: 8px; margin-bottom: 10px;
-  }}
+  .header {{ display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #1a1a2e; padding-bottom: 8px; margin-bottom: 10px; }}
   .header h1 {{ font-size: 20px; letter-spacing: -0.3px; }}
   .header .sub {{ font-size: 11px; color: #666; margin-top: 3px; }}
-  .header .date-badge {{
-    background: #1a1a2e; color: #fff; font-size: 13px; font-weight: 700;
-    padding: 6px 14px; border-radius: 4px;
-  }}
+  .header .date-badge {{ background: #1a1a2e; color: #fff; font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 4px; }}
 
-  .summary {{
-    background: #eef2ff; border: 1px solid #c7d2fe; color: #33389b;
-    font-size: 11px; padding: 7px 10px; border-radius: 4px; margin-bottom: 10px; font-weight: 500;
-  }}
-  .summary.warn {{
-    background: #fff4e5; border: 1px solid #f0b429; color: #8a5a00;
-  }}
-
-  .kpi-row {{ display: flex; gap: 10px; margin-bottom: 12px; }}
-  .kpi {{
-    flex: 1; border: 1px solid #e3e3ea; border-radius: 6px; padding: 10px 13px;
-    background: #fafafc;
-  }}
-  .kpi .label {{
-    font-size: 12px; font-weight: 700; color: #1a1a2e; margin-bottom: 7px;
-    border-left: 3px solid #1a1a2e; padding-left: 6px; line-height: 1.2;
-    white-space: nowrap; overflow: hidden;
-  }}
-  .kpi .value {{ font-size: 18px; font-weight: 700; }}
-  .kpi .value .qty-inline {{ font-size: 12px; font-weight: 500; color: #888; }}
-  .kpi .value.model-name {{ font-size: 15px; letter-spacing: -0.2px; }}
-  .kpi .meta {{ font-size: 10px; color: #888; margin-top: 4px; }}
-  .kpi .meta.sub-line {{ margin-top: 5px; padding-top: 5px; border-top: 1px dashed #e3e3ea; }}
+  .kpi-row {{ display: flex; gap: 10px; margin-bottom: 10px; }}
+  .kpi {{ flex: 1; border: 1px solid #e3e3ea; border-radius: 6px; padding: 9px 12px; background: #fafafc; }}
+  .kpi .label {{ font-size: 11.5px; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; border-left: 3px solid #1a1a2e; padding-left: 6px; white-space: nowrap; }}
+  .kpi .value {{ font-size: 17px; font-weight: 700; }}
+  .kpi .value .qty-inline {{ font-size: 11px; font-weight: 500; color: #888; }}
+  .kpi .value.model-name {{ font-size: 14px; }}
+  .kpi .meta {{ font-size: 9.5px; color: #888; margin-top: 3px; }}
+  .kpi .meta.sub-line {{ margin-top: 4px; padding-top: 4px; border-top: 1px dashed #e3e3ea; }}
   .monthly-kpi {{ display: flex; flex-direction: column; }}
 
-  .weekly-trend-box {{ padding-bottom: 7px; }}
-  .mini-table {{ width: 100%; border-collapse: collapse; margin-top: 4px; }}
-  .mini-table th {{ text-align: left; font-size: 9px; color: #999; font-weight: 500; padding: 3px 3px; border-bottom: 1px solid #e3e3ea; }}
-  .mini-table td {{ font-size: 11px; padding: 4px 3px; border-bottom: 1px solid #f0f0f4; }}
+  .mini-table {{ width: 100%; border-collapse: collapse; margin-top: 3px; }}
+  .mini-table th {{ text-align: left; font-size: 8.5px; color: #999; font-weight: 500; padding: 2px 3px; border-bottom: 1px solid #e3e3ea; }}
+  .mini-table td {{ font-size: 10px; padding: 3px 3px; border-bottom: 1px solid #f0f0f4; }}
   .mini-table td.name {{ font-weight: 600; }}
   .mini-table td.num {{ text-align: right; }}
-  .mini-table tr.current-week td {{ font-weight: 700; color: #1a1a2e; }}
+  .mini-table tr.current-week td {{ font-weight: 700; }}
   .mini-table tr:last-child td {{ border-bottom: none; }}
 
-  .badge {{
-    font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 3px;
-    display: inline-block; min-width: 54px; text-align: center; box-sizing: border-box;
-  }}
+  .badge {{ font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 3px; display: inline-block; min-width: 48px; text-align: center; box-sizing: border-box; }}
   .badge.up {{ background: #e6f7ee; color: #0a8a3e; }}
   .badge.down {{ background: #feeaea; color: #d1372f; }}
   .badge.flat {{ background: #eee; color: #888; }}
 
-  .layout-wrap {{ display: block; }}
-  .layout-row {{
-    width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 10px;
-  }}
-  .layout-row > tr > td {{ width: 50%; vertical-align: top; padding: 0; }}
-  .split-row > tr > td {{ width: auto; }}
-  .layout-row > tr > td:first-child {{ padding-right: 9px; }}
-  .layout-row > tr > td:last-child {{ padding-left: 9px; }}
-  .layout-row .section {{ margin-top: 0; margin-bottom: 0; }}
+  .section {{ border: 1px solid #e3e3ea; border-radius: 6px; padding: 8px 11px; margin-bottom: 7px; }}
+  .section.manage {{ border: 1.5px solid #c4b5fd; background: #faf9ff; }}
+  .section h2 {{ font-size: 11px; font-weight: 700; margin-bottom: 5px; border-left: 3px solid #1a1a2e; padding-left: 6px; }}
+  .section.manage h2 {{ border-left-color: #7c3aed; }}
+  .section h2 .sub {{ font-size: 8.5px; font-weight: 400; color: #999; margin-left: 4px; }}
+  .section h2 .cnt {{ font-size: 9px; font-weight: 700; color: #33389b; background: #eef2ff; padding: 1px 6px; border-radius: 8px; margin-left: 5px; }}
 
-  .section {{
-    border: 1px solid #e3e3ea; border-radius: 6px; padding: 11px 13px; margin-bottom: 10px;
-  }}
-  .section h2 {{
-    font-size: 12px; font-weight: 700; margin-bottom: 7px; color: #1a1a2e;
-    border-left: 3px solid #1a1a2e; padding-left: 6px; line-height: 1.2;
-    white-space: nowrap; overflow: hidden;
-  }}
-  .section h2 .h2-sub {{ font-size: 9.5px; font-weight: 400; color: #999; margin-left: 4px; }}
-  table {{ width: 100%; border-collapse: collapse; font-size: 10.5px; }}
-  th {{
-    text-align: left; font-size: 9.5px; color: #888; font-weight: 500;
-    padding: 4px 4px; border-bottom: 1px solid #e3e3ea;
-  }}
-  td {{ padding: 5px 4px; border-bottom: 1px solid #f0f0f4; }}
-  td.rank {{ color: #aaa; font-weight: 700; width: 16px; }}
-  td.name {{ font-weight: 600; }}
-  td.num {{ text-align: right; }}
-  td.sub {{ color: #999; }}
-  td.highlight {{ color: #d1372f; font-weight: 700; }}
-  td.up-text {{ color: #d1372f; }}
-  td.down-text {{ color: #1a6fd1; }}
-  td.empty {{ text-align: center; color: #aaa; padding: 10px; }}
-  td .dim {{ color: #ccc; }}
-  .wd-date-col {{ font-size: 9px; color: #999; }}
-  table tr.current-week td {{ font-weight: 700; color: #1a1a2e; background: #f7f8fc; }}
+  table.data {{ width: 100%; border-collapse: collapse; font-size: 9.5px; }}
+  table.data th {{ text-align: left; font-size: 8px; color: #888; font-weight: 500; padding: 2px 3px; border-bottom: 1px solid #e3e3ea; }}
+  table.data td {{ padding: 2px 3px; border-bottom: 1px solid #f0f0f4; vertical-align: middle; }}
+  table.data td.name {{ font-weight: 600; }}
+  table.data td.num {{ text-align: right; }}
+  table.data td.base {{ color: #999; }}
+  table.data td.today {{ font-weight: 600; }}
+  table.data td.diff {{ font-weight: 700; }}
+  table.data td.diffpct {{ font-weight: 700; font-size: 9px; }}
+  table.data td.tier-cell, table.data td.spark-cell, table.data td.spark-cell-long {{ text-align: center; }}
+  table.data svg {{ display: block; margin: 0 auto; }}
+  .up-text {{ color: #d1372f; }}
+  .down-text {{ color: #1a6fd1; }}
+  table.data tr:last-child td {{ border-bottom: none; }}
+  table.data td.empty {{ text-align: center; color: #aaa; padding: 8px; }}
 
-  .footer {{ margin-top: 8px; font-size: 8.5px; color: #aaa; text-align: right; }}
+  .tier-badge {{ font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 8px; display: inline-block; }}
+  .tier-badge.up-text {{ background: #feeaea; color: #d1372f; }}
+  .tier-badge.down-text {{ background: #eaf1fe; color: #1a6fd1; }}
+
+  .chip-wrap {{ display: flex; flex-wrap: wrap; gap: 4px; }}
+  .chip {{ background: #fff; border: 1px solid #e3e3ea; font-size: 9.5px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }}
+  .chip.chip-new {{ background: #f3e8ff; border-color: #c4b5fd; color: #6d28d9; }}
+  .chip.chip-gap {{ background: #f4f4f8; border-color: #e3e3ea; color: #1a1a2e; }}
+  .mstar {{ color: #7c3aed; margin-right: 2px; }}
+  .legend {{ font-size: 8px; color: #999; display: flex; gap: 10px; margin-top: 5px; }}
+  .legend span {{ display: inline-flex; align-items: center; gap: 3px; }}
+  .dot {{ width: 6px; height: 6px; border-radius: 50%; display: inline-block; }}
+  .dot-new {{ background: #8b5cf6; }}
+  .dot-gap {{ background: #aaa; }}
+
+  .footer {{ margin-top: auto; font-size: 8px; color: #aaa; text-align: right; }}
 </style>
 </head>
 <body>
@@ -258,8 +222,6 @@ def build_html(data):
     <div class="date-badge">{d['send_date']}</div>
   </div>
 
-  {summary_html}
-
   <div class="kpi-row">
     <div class="kpi">
       <div class="label">일간 매출 (전일 대비)</div>
@@ -272,66 +234,55 @@ def build_html(data):
       <div class="meta">{pct_badge(d['qty_pct'])} &nbsp;전일 {d['prev_qty']:,}개</div>
     </div>
     <div class="kpi">
-      <div class="label">일간 베스트모델 (판매수량 1위)</div>
+      <div class="label">일간 베스트모델</div>
       {best_model_html}
     </div>
   </div>
 
   <div class="kpi-row">
-    <div class="kpi weekly-trend-box">
-      <div class="label">주간 매출 추이 (최근 3주 · 전주 대비)</div>
-      <table class="mini-table">
-        <tr><th>기간</th><th style="text-align:right">매출액</th><th style="text-align:right">증감</th></tr>
-        {wt_rows}
-      </table>
+    <div class="kpi">
+      <div class="label">주간 매출 추이 (최근 3주)</div>
+      <table class="mini-table"><tr><th>기간</th><th style="text-align:right">매출액</th><th style="text-align:right">증감</th></tr>{wt_rows}</table>
     </div>
     <div class="kpi monthly-kpi">
       <div class="label">{mo['range']} 누적매출</div>
       <div class="value">{krw(mo['revenue'])} <span class="qty-inline">· {mo['qty']:,}개</span></div>
       <div class="meta sub-line">전월({mo['prev_month_full_range']}) 총매출 {krw(mo['prev_month_full_revenue'])}</div>
-      <div class="meta">차이 {diff_badge(mo['revenue'] - mo['prev_month_full_revenue'])}</div>
       {target_html}
     </div>
   </div>
 
-  <div class="layout-wrap">
-    <table class="layout-row split-row">
-      <colgroup><col style="width:66%"><col style="width:34%"></colgroup>
-      <tr>
-        <td class="section">
-          <h2>요일별 매출 비교 <span class="h2-sub">직전 3주 평균 vs 최근 실적</span></h2>
-          <table>
-            <tr><th>요일</th><th style="text-align:right">3주 평균매출</th><th style="text-align:right">최근매출</th><th style="text-align:right">날짜</th><th style="text-align:right">증감</th></tr>
-            {wd_rows}
-          </table>
-        </td>
-        <td class="section">
-          <h2>취소 다발 모델 <span class="h2-sub">{data['cancel_range_label']} · TOP3</span></h2>
-          <table>
-            <tr><th></th><th>모델명</th><th style="text-align:right">취소수량</th><th style="text-align:right">취소금액</th></tr>
-            {cancel_rows}
-          </table>
-        </td>
-      </tr>
+  <div class="section manage">
+    <h2>★ 관리모델<span class="sub">추세 60일(2개월,일단위) · 점선=기준평균</span><span class="cnt">{len(manage_models)}건</span></h2>
+    <table class="data">
+      <tr><th>모델명</th><th style="text-align:center">추세(2개월)+기준선</th><th style="text-align:right">기준평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th><th style="text-align:right">증감률</th></tr>
+      {manage_rows}
     </table>
-    <table class="layout-row">
-      <tr>
-        <td class="section">
-          <h2>특이 매출수량 - 급증 <span class="h2-sub">직전 7일 평균 대비</span></h2>
-          <table>
-            <tr><th>모델명</th><th style="text-align:right">당일수량</th><th style="text-align:right">7일평균</th><th style="text-align:right">배율</th></tr>
-            {spike_rows}
-          </table>
-        </td>
-        <td class="section">
-          <h2>특이 매출수량 - 급감 <span class="h2-sub">직전 7일 평균 대비</span></h2>
-          <table>
-            <tr><th>모델명</th><th style="text-align:right">당일수량</th><th style="text-align:right">7일평균</th><th style="text-align:right">배율</th></tr>
-            {drop_rows}
-          </table>
-        </td>
-      </tr>
+  </div>
+
+  <div class="section">
+    <h2>급증 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비</span><span class="cnt">{len(spikes)}건</span></h2>
+    <table class="data">
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      {spike_rows}
     </table>
+  </div>
+
+  <div class="section">
+    <h2>급감 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비</span><span class="cnt">{len(drops)}건</span></h2>
+    <table class="data">
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      {drop_rows}
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>신규 판매 모델<span class="sub">공백 기간 후 기준일 판매 발생</span><span class="cnt">{new_sale_total}건</span></h2>
+    <div class="chip-wrap">{new_sale_chips}</div>
+    <div class="legend">
+      <span><span class="dot dot-new"></span>60일 침묵 모델 (최근 60일 무판매)</span>
+      <span><span class="dot dot-gap"></span>1개월 공백 재판매 (최근 30일 무판매, 31~60일엔 판매 有)</span>
+    </div>
   </div>
 
   <div class="footer">&nbsp;</div>
@@ -340,6 +291,7 @@ def build_html(data):
 </body>
 </html>"""
     return html
+
 
 if __name__ == '__main__':
     with open('report_data.json', encoding='utf-8') as f:
