@@ -22,8 +22,20 @@ MAX_TIER_MODELS = 20
 WEEKDAY_NAMES = ['월', '화', '수', '목', '금', '토', '일']
 
 
+def _read_csv_any_encoding(src):
+    """CSV 인코딩이 utf-8-sig가 아닐 수도 있으므로(엑셀에서 바로 저장한 CSV 등) 순서대로 시도한다."""
+    last_err = None
+    for enc in ('utf-8-sig', 'cp949', 'euc-kr', 'utf-8'):
+        try:
+            return pd.read_csv(src, encoding=enc)
+        except UnicodeDecodeError as e:
+            last_err = e
+            continue
+    raise last_err
+
+
 def load(src):
-    df = pd.read_csv(src, encoding='utf-8-sig')
+    df = _read_csv_any_encoding(src)
     df = df[df['쇼핑몰'].notna()].copy()
     df = df[~df['쇼핑몰'].isin(STOCK_IN_CHANNELS)].copy()  # 입고 채널 완전 제외 (수량+매출 모두)
     df['수량'] = df['수량'].astype(int)
