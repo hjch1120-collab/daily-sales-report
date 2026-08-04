@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from extract_raw import extract
-from build_report import build, MONTHLY_TARGETS
+from build_report import build, MONTHLY_TARGETS, _read_csv_any_encoding
 from make_html import build_html
 
 st.set_page_config(page_title="포쿨_온라인팀_일일보고서", page_icon="📊", layout="centered")
@@ -225,7 +225,7 @@ if uploaded is not None:
         csv_path.write_bytes(uploaded.getvalue())
 
     try:
-        preview = pd.read_csv(csv_path, encoding="utf-8-sig")
+        preview = _read_csv_any_encoding(csv_path)
         preview["주문일자"] = pd.to_datetime(preview["주문일자"], errors="coerce")
         max_date = preview["주문일자"].max()
         default_date = (max_date - timedelta(days=1)).date() if pd.notna(max_date) else date.today()
