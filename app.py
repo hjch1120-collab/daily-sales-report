@@ -235,24 +235,29 @@ if uploaded is not None:
     report_date = st.date_input("보고서 기준일", value=default_date)
 
     if st.button("📄 일일보고서 생성", type="primary"):
-        ensure_chromium()
+        try:
+            ensure_chromium()
 
-        if target_input:
-            MONTHLY_TARGETS[target_key_hint] = target_input
+            if target_input:
+                MONTHLY_TARGETS[target_key_hint] = target_input
 
-        with st.spinner("데이터 계산 중..."):
-            data = build(
-                src=str(csv_path),
-                report_date=report_date.strftime("%Y-%m-%d"),
-                manage_models=manage_models,
-            )
+            with st.spinner("데이터 계산 중..."):
+                data = build(
+                    src=str(csv_path),
+                    report_date=report_date.strftime("%Y-%m-%d"),
+                    manage_models=manage_models,
+                )
 
-        html_str = build_html(data)
-        html_path = WORKDIR / "report.html"
-        html_path.write_text(html_str, encoding="utf-8")
+            html_str = build_html(data)
+            html_path = WORKDIR / "report.html"
+            html_path.write_text(html_str, encoding="utf-8")
 
-        with st.spinner("PDF 생성 중 (최초 1회는 다소 걸릴 수 있어요)..."):
-            pdf_bytes, page_count = html_to_pdf_bytes(html_path)
+            with st.spinner("PDF 생성 중 (최초 1회는 다소 걸릴 수 있어요)..."):
+                pdf_bytes, page_count = html_to_pdf_bytes(html_path)
+        except Exception as e:
+            st.error("보고서 생성 중 오류가 발생했습니다. 아래 상세 내용을 캡처해서 전달해주세요.")
+            st.exception(e)
+            st.stop()
 
         st.success("보고서 생성 완료!")
 
