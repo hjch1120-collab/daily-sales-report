@@ -248,12 +248,19 @@ if uploaded is not None:
                     manage_models=manage_models,
                 )
 
-            html_str = build_html(data)
+            # 1페이지에 안 들어가면 zoom을 조금씩 줄여가며 재시도 (최대 6회, 0.85까지)
             html_path = WORKDIR / "report.html"
-            html_path.write_text(html_str, encoding="utf-8")
-
+            zoom = 1.15
             with st.spinner("PDF 생성 중 (최초 1회는 다소 걸릴 수 있어요)..."):
-                pdf_bytes, page_count = html_to_pdf_bytes(html_path)
+                for attempt in range(6):
+                    html_str = build_html(data, zoom=zoom)
+                    html_path.write_text(html_str, encoding="utf-8")
+                    pdf_bytes, page_count = html_to_pdf_bytes(html_path)
+                    if page_count <= 1:
+                        break
+                    zoom = round(zoom - 0.05, 2)
+                    if zoom < 0.85:
+                        break
         except Exception as e:
             st.error("보고서 생성 중 오류가 발생했습니다. 아래 상세 내용을 캡처해서 전달해주세요.")
             st.exception(e)
@@ -263,9 +270,11 @@ if uploaded is not None:
 
         if page_count > 1:
             st.warning(
-                f"⚠ PDF가 {page_count}페이지로 생성됐어요. 데이터가 많은 날이라 1페이지에 다 안 들어갔을 수 있습니다. "
-                "PDF를 열어서 2페이지에 잘린 내용이 없는지 확인해주세요. (지금 다운로드되는 파일은 1페이지만 포함됩니다.)"
+                f"⚠ 오늘은 급증/급감/관리모델 데이터가 많아서 최대한 축소해도(zoom {zoom}) 1페이지에 다 안 들어갔어요. "
+                f"PDF가 {page_count}페이지로 나왔습니다. (지금 다운로드되는 파일은 1페이지만 포함되어 일부 내용이 잘려 있을 수 있어요.)"
             )
+        elif zoom < 1.15:
+            st.info(f"오늘은 데이터가 많아 글자 크기를 자동으로 살짝 줄여(zoom {zoom}) 1페이지에 맞췄어요.")
 
         st.download_button(
             "📥 PDF 다운로드",
