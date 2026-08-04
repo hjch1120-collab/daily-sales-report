@@ -57,7 +57,7 @@ def sparkline_svg_long(values, baseline, color, w=200, h=26, pad=2):
             f'<circle cx="{last_x:.1f}" cy="{last_y:.1f}" r="1.8" fill="{color}"/></svg>')
 
 
-def build_html(data):
+def build_html(data, zoom=1.15):
     d = data['daily']
     wt = data['weekly_trend']
     mo = data['monthly']
@@ -138,7 +138,7 @@ def build_html(data):
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{
     font-family: 'Noto Sans CJK KR', 'Noto Sans KR', 'NanumGothic', sans-serif;
-    width: 210mm; color: #1a1a2e; background: #ffffff; zoom: 1.15;
+    width: 210mm; color: #1a1a2e; background: #ffffff; zoom: {zoom};
   }}
   .page {{ width: 210mm; height: 297mm; padding: 12mm 13mm; display: flex; flex-direction: column; }}
 
