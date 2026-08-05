@@ -35,7 +35,7 @@ def sparkline_svg(values, color):
 
 
 def sparkline_svg_long(values, baseline, color, w=200, h=26, pad=2):
-    """관리모델용 60일 추세 + 기준평균 점선"""
+    """체크모델용 장기 추세 + 기준평균 점선. width=100%로 렌더링되어 컨테이너(셀) 폭에 맞춰 늘어남."""
     n = len(values)
     maxv = max(max(values), baseline) if max(max(values), baseline) > 0 else 1
     step = (w - 2 * pad) / (n - 1)
@@ -48,26 +48,28 @@ def sparkline_svg_long(values, baseline, color, w=200, h=26, pad=2):
     last_x, last_y = pts[-1]
     area = f"{pad},{h - pad} " + path + f" {last_x:.1f},{h - pad}"
     base_y = h - pad - (baseline / maxv) * (h - 2 * pad)
-    return (f'<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
+    return (f'<svg width="100%" height="{h}" viewBox="0 0 {w} {h}" preserveAspectRatio="none" style="display:block">'
             f'<polygon points="{area}" fill="{color}" opacity="0.08"/>'
             f'<line x1="{pad}" y1="{base_y:.1f}" x2="{w - pad}" y2="{base_y:.1f}" '
             f'stroke="#999" stroke-width="0.8" stroke-dasharray="2.5,1.8"/>'
             f'<polyline points="{path}" fill="none" stroke="{color}" stroke-width="1.1" '
-            f'stroke-linejoin="round" stroke-linecap="round" opacity="0.85"/>'
+            f'stroke-linejoin="round" stroke-linecap="round" opacity="0.85" vector-effect="non-scaling-stroke"/>'
             f'<circle cx="{last_x:.1f}" cy="{last_y:.1f}" r="1.8" fill="{color}"/></svg>')
 
 
-def build_html(data, zoom=1.15):
+
+def build_html(data, zoom=0.92):
     d = data['daily']
     wt = data['weekly_trend']
     mo = data['monthly']
-    manage_models = data.get('manage_models', [])
+    check_models = data.get('check_models', [])
     new_sale = data.get('new_sale', {'silent_60': [], 'gap_30': []})
     spikes = data.get('spikes', [])
     drops = data.get('drops', [])
     wd_name = data.get('baseline_wd_name', '')
     occurrences = data.get('baseline_occurrences', 0)
-    manage_names = {m['원품명'] for m in manage_models}
+    long_occ = data.get('long_trend_occurrences', 0)
+    manage_names = set(data.get('manual_check_models', []))
 
     bm = d.get('best_model')
     if bm:
@@ -93,19 +95,26 @@ def build_html(data, zoom=1.15):
         star = '<span class="mstar">★</span>' if name in manage_names else ''
         return f'{star}{name}'
 
-    # 관리모델
-    manage_rows = ""
-    for m in manage_models:
+    # 체크모델 (1순위: 급감 1순위 자동 반영 / 2순위: 직접 입력한 관리모델)
+    # 순위 뱃지는 소속 그룹이 아니라 실제 급증/급감 기준(diff)으로 계산된 순위. 기준 미달이면 빈칸.
+    check_rows = ""
+    for m in check_models:
         spark = sparkline_svg_long(m['trend60'], m['baseline'], '#7c3aed')
         diff_v = m['diff']
         sign = '+' if diff_v > 0 else ''
         dcls = 'up-text' if diff_v > 0 else ('down-text' if diff_v < 0 else '')
-        pct_txt = f'{"+" if m["diff_pct"] and m["diff_pct"] > 0 else ""}{m["diff_pct"]}%' if m['diff_pct'] is not None else '-'
-        manage_rows += (f'<tr><td class="name">★ {m["원품명"]}</td><td class="spark-cell-long">{spark}</td>'
-                         f'<td class="num base">{m["baseline"]}</td><td class="num today">{m["today_qty"]}</td>'
-                         f'<td class="num diff {dcls}">{sign}{diff_v}</td><td class="num diffpct {dcls}">{pct_txt}</td></tr>')
-    if not manage_models:
-        manage_rows = '<tr><td colspan="6" class="empty">지정된 관리모델 없음</td></tr>'
+        star = '★ ' if m['원품명'] in manage_names else ''
+        if m.get('rank_tier'):
+            tier_cls = 'up-text' if m['rank_type'] == 'spike' else 'down-text'
+            tier_badge = f'<span class="tier-badge {tier_cls}">{m["rank_tier"]}순위</span>'
+        else:
+            tier_badge = ''
+        check_rows += (f'<tr><td class="name">{star}{m["원품명"]}</td><td class="tier-cell">{tier_badge}</td>'
+                        f'<td class="spark-cell-long">{spark}</td>'
+                        f'<td class="num base">{m["baseline"]}</td><td class="num today">{m["today_qty"]}</td>'
+                        f'<td class="num diff {dcls}">{sign}{diff_v}</td></tr>')
+    if not check_models:
+        check_rows = '<tr><td colspan="6" class="empty">체크모델 없음</td></tr>'
 
     silent_60 = new_sale.get('silent_60', [])
     gap_30 = new_sale.get('gap_30', [])
@@ -118,13 +127,15 @@ def build_html(data, zoom=1.15):
     def build_tier_rows(records, color, cls):
         rows = ""
         for r in records:
-            spark = sparkline_svg(r['trend8'], color)
+            spark7 = sparkline_svg(r['trend8'], color)
+            spark_long = sparkline_svg(r['trend_long'], color)
             sign = '+' if r['diff'] > 0 else ''
             rows += (f'<tr><td class="name">{name_cell(r["원품명"])}</td>'
                       f'<td class="tier-cell"><span class="tier-badge {cls}">{r["tier"]}순위</span></td>'
-                      f'<td class="spark-cell">{spark}</td><td class="num base">{r["baseline"]}</td>'
+                      f'<td class="spark-cell">{spark7}</td><td class="spark-cell">{spark_long}</td>'
+                      f'<td class="num base">{r["baseline"]}</td>'
                       f'<td class="num today">{r["today_qty"]}</td><td class="num diff {cls}">{sign}{r["diff"]}</td></tr>')
-        return rows or '<tr><td colspan="6" class="empty">해당 없음</td></tr>'
+        return rows or '<tr><td colspan="7" class="empty">해당 없음</td></tr>'
 
     spike_rows = build_tier_rows(spikes, '#d1372f', 'up-text')
     drop_rows = build_tier_rows(drops, '#1a6fd1', 'down-text')
@@ -140,7 +151,7 @@ def build_html(data, zoom=1.15):
     font-family: 'Noto Sans CJK KR', 'Noto Sans KR', 'NanumGothic', sans-serif;
     width: 210mm; color: #1a1a2e; background: #ffffff; zoom: {zoom};
   }}
-  .page {{ width: 210mm; height: 297mm; padding: 12mm 13mm; display: flex; flex-direction: column; }}
+  .page {{ width: 210mm; height: 297mm; padding: 10mm 12mm; display: flex; flex-direction: column; }}
 
   .header {{ display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #1a1a2e; padding-bottom: 8px; margin-bottom: 10px; }}
   .header h1 {{ font-size: 20px; letter-spacing: -0.3px; }}
@@ -170,17 +181,17 @@ def build_html(data, zoom=1.15):
   .badge.down {{ background: #feeaea; color: #d1372f; }}
   .badge.flat {{ background: #eee; color: #888; }}
 
-  .section {{ border: 1px solid #e3e3ea; border-radius: 6px; padding: 8px 11px; margin-bottom: 7px; }}
+  .section {{ border: 1px solid #e3e3ea; border-radius: 6px; padding: 6px 11px; margin-bottom: 5px; }}
   .section.manage {{ border: 1.5px solid #c4b5fd; background: #faf9ff; }}
   .section h2 {{ font-size: 11px; font-weight: 700; margin-bottom: 5px; border-left: 3px solid #1a1a2e; padding-left: 6px; }}
   .section.manage h2 {{ border-left-color: #7c3aed; }}
   .section h2 .sub {{ font-size: 8.5px; font-weight: 400; color: #999; margin-left: 4px; }}
   .section h2 .cnt {{ font-size: 9px; font-weight: 700; color: #33389b; background: #eef2ff; padding: 1px 6px; border-radius: 8px; margin-left: 5px; }}
 
-  table.data {{ width: 100%; border-collapse: collapse; font-size: 9.5px; }}
+  table.data {{ width: 100%; border-collapse: collapse; font-size: 9.5px; table-layout: fixed; }}
   table.data th {{ text-align: left; font-size: 8px; color: #888; font-weight: 500; padding: 2px 3px; border-bottom: 1px solid #e3e3ea; }}
   table.data td {{ padding: 2px 3px; border-bottom: 1px solid #f0f0f4; vertical-align: middle; }}
-  table.data td.name {{ font-weight: 600; }}
+  table.data td.name {{ font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
   table.data td.num {{ text-align: right; }}
   table.data td.base {{ color: #999; }}
   table.data td.today {{ font-weight: 600; }}
@@ -253,25 +264,28 @@ def build_html(data, zoom=1.15):
   </div>
 
   <div class="section manage">
-    <h2>★ 관리모델<span class="sub">추세 60일(2개월,일단위) · 점선=기준평균</span><span class="cnt">{len(manage_models)}건</span></h2>
+    <h2>★ 체크모델<span class="sub">모델 구성: 급감1순위 자동 + 직접입력 · 순위=실제 급증/급감 기준 · 추세 90일(3개월,일단위)·기준평균은 2개월 9회 그대로</span><span class="cnt">{len(check_models)}건</span></h2>
     <table class="data">
-      <tr><th>모델명</th><th style="text-align:center">추세(2개월)+기준선</th><th style="text-align:right">기준평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th><th style="text-align:right">증감률</th></tr>
-      {manage_rows}
+      <colgroup><col style="width:16%"><col style="width:8%"><col style="width:40%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세(3개월)+기준선</th><th style="text-align:right">기준평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      {check_rows}
     </table>
   </div>
 
   <div class="section">
-    <h2>급증 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비</span><span class="cnt">{len(spikes)}건</span></h2>
+    <h2>급증 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=기준일전7일+오늘 / 동일요일{long_occ}회+오늘(90일)</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <colgroup><col style="width:16%"><col style="width:8%"><col style="width:20%"><col style="width:20%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세(7일)</th><th style="text-align:center">추세(3개월,동일요일)</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {spike_rows}
     </table>
   </div>
 
   <div class="section">
-    <h2>급감 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비</span><span class="cnt">{len(drops)}건</span></h2>
+    <h2>급감 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=기준일전7일+오늘 / 동일요일{long_occ}회+오늘(90일)</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <colgroup><col style="width:16%"><col style="width:8%"><col style="width:20%"><col style="width:20%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세(7일)</th><th style="text-align:center">추세(3개월,동일요일)</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {drop_rows}
     </table>
   </div>
