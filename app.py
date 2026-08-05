@@ -89,7 +89,8 @@ def build_share_text(data: dict) -> str:
     d = data["daily"]
     wt = data["weekly_trend"]
     mo = data["monthly"]
-    manage_models = data.get("manage_models", [])
+    check_models = data.get("check_models", [])
+    manual_check_models = set(data.get("manual_check_models", []))
     spikes = data.get("spikes", [])
     drops = data.get("drops", [])
     new_sale = data.get("new_sale", {"silent_60": [], "gap_30": []})
@@ -125,30 +126,30 @@ def build_share_text(data: dict) -> str:
         s2_lines.append(f"이번달 목표매출 대비 진행률은 {tp_txt}입니다.")
     parts.append("[주간/월누적]\n" + " ".join(s2_lines))
 
-    # ③ 관리모델
-    if manage_models:
+    # ③ 체크모델 (급감1순위 자동 + 직접입력)
+    if check_models:
         s3_lines = []
-        for m in manage_models:
+        for m in check_models:
+            tag = "직접입력" if m["원품명"] in manual_check_models else "급감1순위 자동"
             if m["baseline"] > 0:
                 sign = "증가" if m["diff"] > 0 else ("감소" if m["diff"] < 0 else "동일")
                 s3_lines.append(
-                    f"{m['원품명']}은(는) 평소 평균 {m['baseline']}개 대비 오늘 {m['today_qty']}개로, "
+                    f"{m['원품명']}({tag})은(는) 평소 평균 {m['baseline']}개 대비 오늘 {m['today_qty']}개로, "
                     f"{abs(m['diff'])}개({abs(m['diff_pct']) if m['diff_pct'] is not None else '-'}%) {sign}했습니다."
                 )
             else:
-                s3_lines.append(f"{m['원품명']}은(는) 기준평균 데이터가 없어 오늘 {m['today_qty']}개 판매로만 확인됩니다.")
-        parts.append("[관리모델]\n" + " ".join(s3_lines))
+                s3_lines.append(f"{m['원품명']}({tag})은(는) 기준평균 데이터가 없어 오늘 {m['today_qty']}개 판매로만 확인됩니다.")
+        parts.append("[체크모델]\n" + " ".join(s3_lines))
 
-    # ④ 급증 모델 (1순위 위주)
-    top_spikes = [s for s in spikes if s["tier"] == 1]
-    if top_spikes:
+    # ④ 급증 모델
+    if spikes:
         s4_lines = [
             f"{s['원품명']}이(가) 평균 {s['baseline']}개 대비 오늘 {s['today_qty']}개로 {s['diff']}개 늘었습니다."
-            for s in top_spikes
+            for s in spikes
         ]
         parts.append("[급증 모델]\n" + " ".join(s4_lines))
 
-    # ⑤ 급감 모델 (1순위 위주 + 원인 점검 문구)
+    # ⑤ 급감 모델 (원인 점검 문구)
     top_drops = [s for s in drops if s["tier"] == 1]
     if top_drops:
         s5_lines = [
@@ -190,11 +191,11 @@ file_kind = st.radio(
 uploaded = st.file_uploader("파일 업로드", type=["csv", "xlsx"])
 
 manage_input = st.text_input(
-    "관리모델 (쉼표로 구분해서 원품명 입력, 예: FRE-465RF, FC-49MSW)",
+    "직접 체크할 모델 (쉼표로 구분, 최대 5개, 예: FRE-465RF, FC-49MSW)",
     value="",
-    help="지정한 모델은 순위와 무관하게 항상 ★관리모델 섹션에 표시됩니다. 비워두면 관리모델 섹션은 빈 상태로 나옵니다.",
+    help="여기 입력한 모델은 ★체크모델 섹션에 항상 포함됩니다. 급감 1순위 모델(최대 5개)은 입력 안 해도 자동으로 같이 체크모델에 들어갑니다.",
 )
-manage_models = [m.strip() for m in manage_input.split(",") if m.strip()]
+manage_models = [m.strip() for m in manage_input.split(",") if m.strip()][:5]
 
 target_key_hint = date.today().strftime("%Y-%m")
 with st.expander("⚙️ 이번 달 목표매출 설정 (선택)"):
@@ -248,9 +249,9 @@ if uploaded is not None:
                     manage_models=manage_models,
                 )
 
-            # 1페이지에 안 들어가면 zoom을 조금씩 줄여가며 재시도 (최대 6회, 0.85까지)
+            # 1페이지에 안 들어가면 zoom을 조금씩 줄여가며 재시도 (최대 6회, 0.70까지)
             html_path = WORKDIR / "report.html"
-            zoom = 1.15
+            zoom = 0.92
             with st.spinner("PDF 생성 중 (최초 1회는 다소 걸릴 수 있어요)..."):
                 for attempt in range(6):
                     html_str = build_html(data, zoom=zoom)
@@ -258,8 +259,8 @@ if uploaded is not None:
                     pdf_bytes, page_count = html_to_pdf_bytes(html_path)
                     if page_count <= 1:
                         break
-                    zoom = round(zoom - 0.05, 2)
-                    if zoom < 0.85:
+                    zoom = round(zoom - 0.04, 2)
+                    if zoom < 0.70:
                         break
         except Exception as e:
             st.error("보고서 생성 중 오류가 발생했습니다. 아래 상세 내용을 캡처해서 전달해주세요.")
@@ -270,10 +271,10 @@ if uploaded is not None:
 
         if page_count > 1:
             st.warning(
-                f"⚠ 오늘은 급증/급감/관리모델 데이터가 많아서 최대한 축소해도(zoom {zoom}) 1페이지에 다 안 들어갔어요. "
+                f"⚠ 오늘은 급증/급감/체크모델 데이터가 많아서 최대한 축소해도(zoom {zoom}) 1페이지에 다 안 들어갔어요. "
                 f"PDF가 {page_count}페이지로 나왔습니다. (지금 다운로드되는 파일은 1페이지만 포함되어 일부 내용이 잘려 있을 수 있어요.)"
             )
-        elif zoom < 1.15:
+        elif zoom < 0.92:
             st.info(f"오늘은 데이터가 많아 글자 크기를 자동으로 살짝 줄여(zoom {zoom}) 1페이지에 맞췄어요.")
 
         st.download_button(
