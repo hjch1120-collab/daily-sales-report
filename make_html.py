@@ -135,11 +135,14 @@ def build_html(data, zoom=0.92):
             sign = '+' if r['diff'] > 0 else ''
             rows += (f'<tr><td class="name">{name_cell(r["원품명"])}</td>'
                       f'<td class="tier-cell"><span class="tier-badge {cls}">{r["tier"]}순위</span></td>'
-                      f'<td class="spark-cell">{spark_3mo}</td><td class="spark-cell">{spark_month}</td>'
-                      f'<td class="spark-cell">{spark_week}</td><td class="spark-cell">{spark_3mo_sd}</td>'
+                      f'<td class="spark-cell">{spark_3mo}<div class="spark-avg">일평균 {r["avg_3mo"]}</div></td>'
+                      f'<td class="spark-cell">{spark_month}<div class="spark-avg">일평균 {r["avg_month"]}</div></td>'
+                      f'<td class="spark-cell">{spark_week}<div class="spark-avg">일평균 {r["avg_week"]}</div></td>'
+                      f'<td class="spark-cell">{spark_3mo_sd}<div class="spark-avg">평균 {r["avg_3mo_sameday"]}</div></td>'
                       f'<td class="num base">{r["baseline"]}</td>'
                       f'<td class="num today">{r["today_qty"]}</td><td class="num diff {cls}">{sign}{r["diff"]}</td></tr>')
         return rows or '<tr><td colspan="9" class="empty">해당 없음</td></tr>'
+
 
     spike_rows = build_tier_rows(spikes, '#d1372f', 'up-text')
     drop_rows = build_tier_rows(drops, '#1a6fd1', 'down-text')
@@ -203,6 +206,7 @@ def build_html(data, zoom=0.92):
   table.data td.diffpct {{ font-weight: 700; font-size: 9px; }}
   table.data td.tier-cell, table.data td.spark-cell, table.data td.spark-cell-long {{ text-align: center; }}
   table.data svg {{ display: block; margin: 0 auto; }}
+  .spark-avg {{ font-size: 7px; color: #999; margin-top: 1px; }}
   .up-text {{ color: #d1372f; }}
   .down-text {{ color: #1a6fd1; }}
   table.data tr:last-child td {{ border-bottom: none; }}
