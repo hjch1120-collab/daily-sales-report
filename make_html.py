@@ -66,6 +66,7 @@ def build_html(data, zoom=0.92):
     new_sale = data.get('new_sale', {'silent_60': [], 'gap_30': []})
     spikes = data.get('spikes', [])
     drops = data.get('drops', [])
+    drops_is_fallback = data.get('drops_is_fallback', False)
     wd_name = data.get('baseline_wd_name', '')
     occurrences = data.get('baseline_occurrences', 0)
     long_occ = data.get('long_trend_occurrences', 0)
@@ -282,7 +283,7 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section">
-    <h2>급감 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=기준일전7일+오늘 / 동일요일{long_occ}회+오늘(90일)</span><span class="cnt">{len(drops)}건</span></h2>
+    <h2>급감 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=기준일전7일+오늘 / 동일요일{long_occ}회+오늘(90일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:16%"><col style="width:8%"><col style="width:20%"><col style="width:20%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
       <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세(7일)</th><th style="text-align:center">추세(3개월,동일요일)</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
