@@ -1,3 +1,4 @@
+import importlib
 import io
 import subprocess
 import sys
@@ -7,8 +8,17 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import extract_raw
+import build_report
+import make_html
+
+# 배포 환경에서 모듈이 캐시되어 코드 변경이 반영 안 되는 경우 방지를 위해 매 실행마다 강제 재로딩
+importlib.reload(build_report)
+importlib.reload(make_html)
+importlib.reload(extract_raw)
+
 from extract_raw import extract
-from build_report import build, MONTHLY_TARGETS, _read_csv_any_encoding
+from build_report import build, MONTHLY_TARGETS, _read_csv_any_encoding, DROP_FALLBACK_COUNT
 from make_html import build_html
 
 st.set_page_config(page_title="포쿨_온라인팀_일일보고서", page_icon="📊", layout="centered")
@@ -292,3 +302,6 @@ if uploaded is not None:
             st.components.v1.html(html_str, height=1400, scrolling=True)
 else:
     st.info("파일을 업로드하면 이어서 진행할 수 있어요.")
+
+st.divider()
+st.caption(f"engine check · DROP_FALLBACK_COUNT={DROP_FALLBACK_COUNT} · build_report={build_report.__file__}")
