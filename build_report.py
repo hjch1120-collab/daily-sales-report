@@ -260,6 +260,16 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'avg_3mo': round(sum(trend_3mo) / len(trend_3mo), 1) if trend_3mo else 0.0,
                 'avg_3mo_sameday': round(sum(trend_3mo_sameday) / len(trend_3mo_sameday), 1) if trend_3mo_sameday else 0.0,
             })
+        # 3개월->1개월->직전주간 평균이 한 방향으로 계속 움직이는지(지속 하락/상승) 보조 신호.
+        # 판정(순위)에는 영향 없음 - "요즘 흐름이 심상치 않을 수 있다"는 참고용 배지일 뿐.
+        for rec in records:
+            a3, a1, aw = rec['avg_3mo'], rec['avg_month'], rec['avg_week']
+            if a3 > a1 > aw:
+                rec['trend_consistency'] = 'down'
+            elif a3 < a1 < aw:
+                rec['trend_consistency'] = 'up'
+            else:
+                rec['trend_consistency'] = None
         return records
 
     spikes = _tier_records(spike_df, 'spike_tier')
