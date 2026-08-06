@@ -171,33 +171,34 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     baseline_window = valid[valid['주문일자'].dt.date.isin(same_wd_dates)]
     baseline_all = (baseline_window.groupby('원품명')['수량'].sum() / n_occ) if n_occ else pd.Series(dtype=float)
 
-    # 8일 추세 (지난주 월~일 + 오늘) - 급증/급감 표용 (그래프1: 기준일 전 7일 + 오늘)
-    days8 = pd.date_range(report_date - pd.Timedelta(days=7), report_date, freq='D')
-    sub8 = valid[(valid['주문일자'] >= days8[0]) & (valid['주문일자'] <= days8[-1])]
-    pivot8 = sub8.pivot_table(index='원품명', columns='주문일자', values='수량', aggfunc='sum', fill_value=0)
-    pivot8 = pivot8.reindex(columns=days8, fill_value=0)
-    today_qty8 = pivot8.iloc[:, 7] if pivot8.shape[1] == 8 else pd.Series(dtype=float)
+    # 급증/급감 표용 추세 3종 (모두 연속 일자 기준, 동일요일 필터 없음)
+    #  - 직전주간: 기준일 전 7일 + 오늘 (8개 포인트)
+    #  - 1개월: 기준일 전 29일 + 오늘 (30개 포인트)
+    #  - 3개월: 기준일 전 89일 + 오늘 (90개 포인트)
+    def _continuous_pivot(days_back):
+        data_min_d = valid['주문일자'].min()
+        start = max(data_min_d, report_date - pd.Timedelta(days=days_back))
+        date_idx = pd.date_range(start, report_date, freq='D')
+        sub = valid[(valid['주문일자'] >= date_idx[0]) & (valid['주문일자'] <= date_idx[-1])]
+        pv = sub.pivot_table(index='원품명', columns='주문일자', values='수량', aggfunc='sum', fill_value=0)
+        pv = pv.reindex(columns=date_idx, fill_value=0)
+        return pv, date_idx
 
-    # 90일(3개월) 기준 동일요일 추이 - 급증/급감 표용 (그래프2: 참고용 장기 추세. 판단 기준인 baseline/평균은 여전히 2개월 9회 그대로)
-    past_same_wd_90 = valid[(valid['주문일자'] < report_date) & (valid['주문일자'] >= report_date - pd.Timedelta(days=90)) & (valid['주문일자'].dt.weekday == target_wd)]
-    long_trend_dates = sorted(past_same_wd_90['주문일자'].dt.date.unique()) + [report_date.date()]
-    n_long_pts = len(long_trend_dates)
-    sub_long = valid[valid['주문일자'].dt.date.isin(long_trend_dates)]
-    pivot_long = sub_long.pivot_table(index='원품명', columns=sub_long['주문일자'].dt.date, values='수량', aggfunc='sum', fill_value=0)
-    pivot_long = pivot_long.reindex(columns=long_trend_dates, fill_value=0)
+    pivot_week, days_week = _continuous_pivot(7)
+    pivot_month, days_month = _continuous_pivot(29)
+    pivot_3mo, days_3mo = _continuous_pivot(89)
 
-    all_models = pivot8.index.union(baseline_all.index).union(pd.Index(manage_models))
-    today_qty_r = today_qty8.reindex(all_models, fill_value=0)
+    today_qty_series = today.groupby('원품명')['수량'].sum() if len(today) else pd.Series(dtype=float)
+
+    all_models = pivot_week.index.union(baseline_all.index).union(pd.Index(manage_models))
+    today_qty_r = today_qty_series.reindex(all_models, fill_value=0)
     baseline_r = baseline_all.reindex(all_models, fill_value=0.0)
-    pivot8_r = pivot8.reindex(all_models, fill_value=0)
-    pivot_long_r = pivot_long.reindex(all_models, fill_value=0)
+    pivot_week_r = pivot_week.reindex(index=all_models, fill_value=0)
+    pivot_month_r = pivot_month.reindex(index=all_models, fill_value=0)
+    pivot_3mo_r = pivot_3mo.reindex(index=all_models, fill_value=0)
     diff = today_qty_r - baseline_r
 
     result = pd.DataFrame({'baseline': baseline_r.round(1), 'today_qty': today_qty_r, 'diff': diff.round(1)})
-    for i in range(8):
-        result[f'd{i}'] = pivot8_r.iloc[:, i] if pivot8_r.shape[1] == 8 else 0
-    for i in range(n_long_pts):
-        result[f'lg{i}'] = pivot_long_r.iloc[:, i] if pivot_long_r.shape[1] == n_long_pts else 0
 
     # 신규 판매 모델 (기준일 판매 발생 모델 중 공백 기간으로 2단계 분류)
     #  - 60일 침묵 모델: 최근 60일간 판매 0건 (신상품일 수도, 오래 방치된 모델일 수도 있음)
@@ -237,8 +238,9 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'baseline': float(r['baseline']),
                 'today_qty': int(r['today_qty']),
                 'diff': float(r['diff']),
-                'trend8': [int(r[f'd{i}']) for i in range(8)],
-                'trend_long': [int(r[f'lg{i}']) for i in range(n_long_pts)],
+                'trend_week': pivot_week_r.loc[name].astype(int).tolist() if name in pivot_week_r.index else [0] * len(days_week),
+                'trend_month': pivot_month_r.loc[name].astype(int).tolist() if name in pivot_month_r.index else [0] * len(days_month),
+                'trend_3mo': pivot_3mo_r.loc[name].astype(int).tolist() if name in pivot_3mo_r.index else [0] * len(days_3mo),
             })
         return records
 
@@ -293,7 +295,6 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
         'month_label': month_start.strftime('%Y년 %m월'),
         'baseline_wd_name': wd_name,
         'baseline_occurrences': n_occ,
-        'long_trend_occurrences': n_long_pts - 1,
         'check_models': check_models,
         'manual_check_models': manual_check_names,  # ★ 표시(다른 섹션 강조)용 - 직접 입력한 모델만
         'new_sale': new_sale,
