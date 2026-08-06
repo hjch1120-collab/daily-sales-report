@@ -188,6 +188,14 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     pivot_month, days_month = _continuous_pivot(29)
     pivot_3mo, days_3mo = _continuous_pivot(89)
 
+    # 3개월(동일요일) 추세: 기준일 이전 90일 이내의 동일 요일 데이터 전부 + 오늘.
+    # 판단 기준인 "평균"과 같은 축(동일 요일)으로 봐서 증감 숫자와 그래프가 일치하는 참고용 추세.
+    past_same_wd_90 = valid[(valid['주문일자'] < report_date) & (valid['주문일자'] >= report_date - pd.Timedelta(days=90)) & (valid['주문일자'].dt.weekday == target_wd)]
+    days_3mo_sameday = sorted(past_same_wd_90['주문일자'].dt.date.unique()) + [report_date.date()]
+    sub_sameday = valid[valid['주문일자'].dt.date.isin(days_3mo_sameday)]
+    pivot_3mo_sameday = sub_sameday.pivot_table(index='원품명', columns=sub_sameday['주문일자'].dt.date, values='수량', aggfunc='sum', fill_value=0)
+    pivot_3mo_sameday = pivot_3mo_sameday.reindex(columns=days_3mo_sameday, fill_value=0)
+
     today_qty_series = today.groupby('원품명')['수량'].sum() if len(today) else pd.Series(dtype=float)
 
     all_models = pivot_week.index.union(baseline_all.index).union(pd.Index(manage_models))
@@ -196,6 +204,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     pivot_week_r = pivot_week.reindex(index=all_models, fill_value=0)
     pivot_month_r = pivot_month.reindex(index=all_models, fill_value=0)
     pivot_3mo_r = pivot_3mo.reindex(index=all_models, fill_value=0)
+    pivot_3mo_sameday_r = pivot_3mo_sameday.reindex(index=all_models, fill_value=0)
     diff = today_qty_r - baseline_r
 
     result = pd.DataFrame({'baseline': baseline_r.round(1), 'today_qty': today_qty_r, 'diff': diff.round(1)})
@@ -241,6 +250,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'trend_week': pivot_week_r.loc[name].astype(int).tolist() if name in pivot_week_r.index else [0] * len(days_week),
                 'trend_month': pivot_month_r.loc[name].astype(int).tolist() if name in pivot_month_r.index else [0] * len(days_month),
                 'trend_3mo': pivot_3mo_r.loc[name].astype(int).tolist() if name in pivot_3mo_r.index else [0] * len(days_3mo),
+                'trend_3mo_sameday': pivot_3mo_sameday_r.loc[name].astype(int).tolist() if name in pivot_3mo_sameday_r.index else [0] * len(days_3mo_sameday),
             })
         return records
 
