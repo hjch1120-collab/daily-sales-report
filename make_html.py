@@ -128,15 +128,16 @@ def build_html(data, zoom=0.92):
     def build_tier_rows(records, color, cls):
         rows = ""
         for r in records:
-            spark7 = sparkline_svg(r['trend8'], color)
-            spark_long = sparkline_svg(r['trend_long'], color)
+            spark_week = sparkline_svg(r['trend_week'], color)
+            spark_month = sparkline_svg(r['trend_month'], color)
+            spark_3mo = sparkline_svg(r['trend_3mo'], color)
             sign = '+' if r['diff'] > 0 else ''
             rows += (f'<tr><td class="name">{name_cell(r["원품명"])}</td>'
                       f'<td class="tier-cell"><span class="tier-badge {cls}">{r["tier"]}순위</span></td>'
-                      f'<td class="spark-cell">{spark7}</td><td class="spark-cell">{spark_long}</td>'
+                      f'<td class="spark-cell">{spark_week}</td><td class="spark-cell">{spark_month}</td><td class="spark-cell">{spark_3mo}</td>'
                       f'<td class="num base">{r["baseline"]}</td>'
                       f'<td class="num today">{r["today_qty"]}</td><td class="num diff {cls}">{sign}{r["diff"]}</td></tr>')
-        return rows or '<tr><td colspan="7" class="empty">해당 없음</td></tr>'
+        return rows or '<tr><td colspan="8" class="empty">해당 없음</td></tr>'
 
     spike_rows = build_tier_rows(spikes, '#d1372f', 'up-text')
     drop_rows = build_tier_rows(drops, '#1a6fd1', 'down-text')
@@ -274,19 +275,19 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section">
-    <h2>급증 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=기준일전7일+오늘 / 동일요일{long_occ}회+오늘(90일)</span><span class="cnt">{len(spikes)}건</span></h2>
+    <h2>급증 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=직전주간(7일)/1개월(30일)/3개월(90일), 모두 일단위 연속</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
-      <colgroup><col style="width:16%"><col style="width:8%"><col style="width:20%"><col style="width:20%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세(7일)</th><th style="text-align:center">추세(3개월,동일요일)</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <colgroup><col style="width:14%"><col style="width:7%"><col style="width:13%"><col style="width:13%"><col style="width:14%"><col style="width:13%"><col style="width:13%"><col style="width:13%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">직전주간</th><th style="text-align:center">1개월</th><th style="text-align:center">3개월</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {spike_rows}
     </table>
   </div>
 
   <div class="section">
-    <h2>급감 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=기준일전7일+오늘 / 동일요일{long_occ}회+오늘(90일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
+    <h2>급감 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=직전주간(7일)/1개월(30일)/3개월(90일), 모두 일단위 연속{' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
-      <colgroup><col style="width:16%"><col style="width:8%"><col style="width:20%"><col style="width:20%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세(7일)</th><th style="text-align:center">추세(3개월,동일요일)</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <colgroup><col style="width:14%"><col style="width:7%"><col style="width:13%"><col style="width:13%"><col style="width:14%"><col style="width:13%"><col style="width:13%"><col style="width:13%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">직전주간</th><th style="text-align:center">1개월</th><th style="text-align:center">3개월</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {drop_rows}
     </table>
   </div>
