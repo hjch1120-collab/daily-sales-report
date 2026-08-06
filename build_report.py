@@ -20,6 +20,9 @@ BASELINE_OCCURRENCES = 9
 MAX_TIER_MODELS = 20
 SPIKE_MAX_DISPLAY = 5  # 급증모델은 최대 5개만 노출 (3순위 제외, 1~2순위만 대상)
 
+# 급감모델 1~2순위가 하나도 없을 때, 3순위(-1~-1.9) 중 감소폭이 큰 순서로 대신 노출할 개수
+DROP_FALLBACK_COUNT = 5
+
 WEEKDAY_NAMES = ['월', '화', '수', '목', '금', '토', '일']
 
 
@@ -216,6 +219,15 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     spike_df = existing[existing['spike_tier'].isin([1, 2])].sort_values(['spike_tier', 'diff'], ascending=[True, False]).head(SPIKE_MAX_DISPLAY)
     drop_df = existing[existing['drop_tier'].isin([1, 2])].sort_values(['drop_tier', 'diff'], ascending=[True, True]).head(MAX_TIER_MODELS)
 
+    # 급감 1~2순위가 하나도 없는 날: 3순위(-1~-1.9) 중 감소폭이 큰 순서로 최대 DROP_FALLBACK_COUNT개 대체 노출.
+    # (완전히 급감 없음으로 비워두기보다, 상대적으로 가장 근접한 모델을 참고용으로 보여주기 위함)
+    drops_is_fallback = False
+    if len(drop_df) == 0:
+        fallback_df = existing[existing['drop_tier'] == 3].sort_values('diff', ascending=True).head(DROP_FALLBACK_COUNT)
+        if len(fallback_df):
+            drop_df = fallback_df
+            drops_is_fallback = True
+
     def _tier_records(df_, tier_col):
         records = []
         for name, r in df_.iterrows():
@@ -287,6 +299,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
         'new_sale': new_sale,
         'spikes': spikes,
         'drops': drops,
+        'drops_is_fallback': drops_is_fallback,
     }
     return result_dict
 
