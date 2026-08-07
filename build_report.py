@@ -196,6 +196,16 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     pivot_3mo_sameday = sub_sameday.pivot_table(index='원품명', columns=sub_sameday['주문일자'].dt.date, values='수량', aggfunc='sum', fill_value=0)
     pivot_3mo_sameday = pivot_3mo_sameday.reindex(columns=days_3mo_sameday, fill_value=0)
 
+    # 지난주(월~일) 캘린더 주 - 참고용 숫자 컬럼 하나(그래프 없음).
+    # "주간 매출 추이" KPI의 지난주와 동일한 개념(월~일 캘린더 주)이며, 급증/급감 표의 "직전주간"(오늘 기준 거꾸로 7일)과는 다른 기간이다.
+    this_week_monday = report_date - pd.Timedelta(days=report_date.weekday())
+    last_week_start = this_week_monday - pd.Timedelta(days=7)
+    last_week_end = this_week_monday - pd.Timedelta(days=1)
+    days_last_week = pd.date_range(last_week_start, last_week_end, freq='D')
+    sub_last_week = valid[(valid['주문일자'] >= days_last_week[0]) & (valid['주문일자'] <= days_last_week[-1])]
+    pivot_last_week = sub_last_week.pivot_table(index='원품명', columns='주문일자', values='수량', aggfunc='sum', fill_value=0)
+    pivot_last_week = pivot_last_week.reindex(columns=days_last_week, fill_value=0)
+
     today_qty_series = today.groupby('원품명')['수량'].sum() if len(today) else pd.Series(dtype=float)
 
     all_models = pivot_week.index.union(baseline_all.index).union(pd.Index(manage_models))
@@ -205,6 +215,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     pivot_month_r = pivot_month.reindex(index=all_models, fill_value=0)
     pivot_3mo_r = pivot_3mo.reindex(index=all_models, fill_value=0)
     pivot_3mo_sameday_r = pivot_3mo_sameday.reindex(index=all_models, fill_value=0)
+    pivot_last_week_r = pivot_last_week.reindex(index=all_models, fill_value=0)
     diff = today_qty_r - baseline_r
 
     result = pd.DataFrame({'baseline': baseline_r.round(1), 'today_qty': today_qty_r, 'diff': diff.round(1)})
@@ -245,6 +256,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
             trend_month = pivot_month_r.loc[name].astype(int).tolist() if name in pivot_month_r.index else [0] * len(days_month)
             trend_3mo = pivot_3mo_r.loc[name].astype(int).tolist() if name in pivot_3mo_r.index else [0] * len(days_3mo)
             trend_3mo_sameday = pivot_3mo_sameday_r.loc[name].astype(int).tolist() if name in pivot_3mo_sameday_r.index else [0] * len(days_3mo_sameday)
+            last_week_vals = pivot_last_week_r.loc[name].tolist() if name in pivot_last_week_r.index else [0] * len(days_last_week)
             records.append({
                 '원품명': name,
                 'tier': int(r[tier_col]),
@@ -259,6 +271,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'avg_month': round(sum(trend_month) / len(trend_month), 1) if trend_month else 0.0,
                 'avg_3mo': round(sum(trend_3mo) / len(trend_3mo), 1) if trend_3mo else 0.0,
                 'avg_3mo_sameday': round(sum(trend_3mo_sameday) / len(trend_3mo_sameday), 1) if trend_3mo_sameday else 0.0,
+                'avg_last_week': round(sum(last_week_vals) / len(last_week_vals), 1) if last_week_vals else 0.0,
             })
         # 3개월->1개월->직전주간 평균이 한 방향으로 계속 움직이는지(지속 하락/상승) 보조 신호.
         # 판정(순위)에는 영향 없음 - "요즘 흐름이 심상치 않을 수 있다"는 참고용 배지일 뿐.
