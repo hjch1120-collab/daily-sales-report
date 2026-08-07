@@ -285,7 +285,7 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section manage">
-    <h2>★ 체크모델<span class="sub">모델 구성: 급감1순위 자동 + 직접입력 · 순위=실제 급증/급감 기준 · 추세 90일(3개월,일단위)·기준평균은 2개월 9회 그대로</span><span class="cnt">{len(check_models)}건</span></h2>
+    <h2>★ 체크모델<span class="sub">모델 구성: 급감1순위 자동 + 직접입력 · 순위=실제 급증/급감 기준 · 추세 90일(3개월,일단위)·기준평균은 직전7일 일평균</span><span class="cnt">{len(check_models)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:16%"><col style="width:8%"><col style="width:40%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
       <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세(3개월)+기준선</th><th style="text-align:right">기준평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
@@ -294,19 +294,19 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section">
-    <h2>급증 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=3개월(90일,연속)/1개월(30일)/지난주(월~일)/2개월(동일요일)/직전주간(7일)</span><span class="cnt">{len(spikes)}건</span></h2>
+    <h2>급증 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=3개월(90일,연속)/1개월(30일)/지난주(월~일)/2개월(동일요일)/직전7일</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:18%"><col style="width:7%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:8%"><col style="width:9%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">직전주간</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">직전7일</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {spike_rows}
     </table>
   </div>
 
   <div class="section">
-    <h2>급감 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=3개월(90일,연속)/1개월(30일)/지난주(월~일)/2개월(동일요일)/직전주간(7일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
+    <h2>급감 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=3개월(90일,연속)/1개월(30일)/지난주(월~일)/2개월(동일요일)/직전7일{' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:18%"><col style="width:7%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:8%"><col style="width:9%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">직전주간</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">직전7일</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {drop_rows}
     </table>
   </div>
