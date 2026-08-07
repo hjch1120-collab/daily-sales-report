@@ -146,9 +146,10 @@ def build_html(data, zoom=0.92):
                       f'<td class="spark-cell">{spark_month}<div class="spark-avg">일평균 {r["avg_month"]}</div></td>'
                       f'<td class="spark-cell">{spark_week}<div class="spark-avg">일평균 {r["avg_week"]}</div></td>'
                       f'<td class="spark-cell">{spark_3mo_sd}<div class="spark-avg">평균 {r["avg_3mo_sameday"]}</div></td>'
+                      f'<td class="num lastweek">{r["avg_last_week"]}</td>'
                       f'<td class="num base">{r["baseline"]}</td>'
                       f'<td class="num today">{r["today_qty"]}</td><td class="num diff {cls}">{sign}{r["diff"]}</td></tr>')
-        return rows or '<tr><td colspan="9" class="empty">해당 없음</td></tr>'
+        return rows or '<tr><td colspan="10" class="empty">해당 없음</td></tr>'
 
 
 
@@ -294,8 +295,8 @@ def build_html(data, zoom=0.92):
   <div class="section">
     <h2>급증 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=3개월(90일,연속)/1개월(30일)/직전주간(7일)/3개월(동일요일)</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
-      <colgroup><col style="width:18%"><col style="width:5%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:12%"><col style="width:8%"><col style="width:8%"><col style="width:8%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">직전주간</th><th style="text-align:center">3개월(동일요일)</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <colgroup><col style="width:16%"><col style="width:7%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:12%"><col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:8%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">직전주간</th><th style="text-align:center">3개월(동일요일)</th><th style="text-align:right">지난주(월~일)</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {spike_rows}
     </table>
   </div>
@@ -303,8 +304,8 @@ def build_html(data, zoom=0.92):
   <div class="section">
     <h2>급감 모델 (우선순위)<span class="sub">최근 {occurrences}회 {wd_name}요일 평균 대비 · 추세=3개월(90일,연속)/1개월(30일)/직전주간(7일)/3개월(동일요일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
-      <colgroup><col style="width:18%"><col style="width:5%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:12%"><col style="width:8%"><col style="width:8%"><col style="width:8%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">직전주간</th><th style="text-align:center">3개월(동일요일)</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <colgroup><col style="width:16%"><col style="width:7%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:12%"><col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:8%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">직전주간</th><th style="text-align:center">3개월(동일요일)</th><th style="text-align:right">지난주(월~일)</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {drop_rows}
     </table>
   </div>
