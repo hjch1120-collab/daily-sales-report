@@ -99,6 +99,8 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
 
     today = valid[valid['주문일자'] == report_date]
     yday = valid[valid['주문일자'] == prev_day]
+    prev_sameweekday = report_date - pd.Timedelta(days=7)
+    pweek = valid[valid['주문일자'] == prev_sameweekday]
 
     # 1. 일간 매출 / 판매수량 / 베스트모델
     daily = {
@@ -112,6 +114,12 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
         'qty': int(today['수량'].sum()),
         'prev_qty': int(yday['수량'].sum()),
         'qty_pct': _pct(today['수량'].sum(), yday['수량'].sum()),
+        'prev_sameweekday_date': prev_sameweekday.strftime('%Y-%m-%d'),
+        'prev_sameweekday_weekday': WEEKDAY_NAMES[prev_sameweekday.weekday()],
+        'prev_sameweekday_revenue': int(pweek['매출액'].sum()),
+        'prev_sameweekday_revenue_pct': _pct(today['매출액'].sum(), pweek['매출액'].sum()),
+        'prev_sameweekday_qty': int(pweek['수량'].sum()),
+        'prev_sameweekday_qty_pct': _pct(today['수량'].sum(), pweek['수량'].sum()),
     }
     today_model_qty = today.groupby('원품명').agg(수량=('수량', 'sum'), 매출액=('매출액', 'sum')).sort_values('수량', ascending=False)
     if len(today_model_qty):
