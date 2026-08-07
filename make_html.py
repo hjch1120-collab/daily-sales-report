@@ -261,11 +261,13 @@ def build_html(data, zoom=0.92):
       <div class="label">일간 매출 (전일 대비)</div>
       <div class="value">{krw(d['revenue'])}</div>
       <div class="meta">{pct_badge(d['revenue_pct'])} &nbsp;전일 {krw(d['prev_revenue'])}</div>
+      <div class="meta sub-line">{pct_badge(d['prev_sameweekday_revenue_pct'])} &nbsp;전주 {d['prev_sameweekday_weekday']}요일 {krw(d['prev_sameweekday_revenue'])}</div>
     </div>
     <div class="kpi">
       <div class="label">일간 판매수량 (전일 대비)</div>
       <div class="value">{d['qty']:,}개</div>
       <div class="meta">{pct_badge(d['qty_pct'])} &nbsp;전일 {d['prev_qty']:,}개</div>
+      <div class="meta sub-line">{pct_badge(d['prev_sameweekday_qty_pct'])} &nbsp;전주 {d['prev_sameweekday_weekday']}요일 {d['prev_sameweekday_qty']:,}개</div>
     </div>
     <div class="kpi">
       <div class="label">일간 베스트모델</div>
