@@ -127,12 +127,13 @@ def build_html(data, zoom=0.92):
 
     def build_tier_rows(records, color, cls):
         rows = ""
+        highlight_color = '#7c3aed'  # 직전7일: 평균/기준일/증감과 같은 축이라 구분되는 강조색 사용
         for r in records:
+            spark_3mo_sd = sparkline_svg(r['trend_3mo_sameday'], color)
             spark_3mo = sparkline_svg(r['trend_3mo'], color)
             spark_month = sparkline_svg(r['trend_month'], color)
             spark_lastweek = sparkline_svg(r['trend_last_week'], color)
-            spark_3mo_sd = sparkline_svg(r['trend_3mo_sameday'], color)
-            spark_week = sparkline_svg(r['trend_week'], color)
+            spark_week = sparkline_svg(r['trend_week'], highlight_color)
             sign = '+' if r['diff'] > 0 else ''
             consistency = r.get('trend_consistency')
             if consistency == 'down':
@@ -143,11 +144,11 @@ def build_html(data, zoom=0.92):
                 consist_badge = ''
             rows += (f'<tr><td class="name">{name_cell(r["원품명"])}{consist_badge}</td>'
                       f'<td class="tier-cell"><span class="tier-badge {cls}">{r["tier"]}순위</span></td>'
+                      f'<td class="spark-cell">{spark_3mo_sd}<div class="spark-avg">평균 {r["avg_3mo_sameday"]}</div></td>'
                       f'<td class="spark-cell">{spark_3mo}<div class="spark-avg">일평균 {r["avg_3mo"]}</div></td>'
                       f'<td class="spark-cell">{spark_month}<div class="spark-avg">일평균 {r["avg_month"]}</div></td>'
                       f'<td class="spark-cell">{spark_lastweek}<div class="spark-avg">일평균 {r["avg_last_week"]}</div></td>'
-                      f'<td class="spark-cell">{spark_3mo_sd}<div class="spark-avg">평균 {r["avg_3mo_sameday"]}</div></td>'
-                      f'<td class="spark-cell">{spark_week}<div class="spark-avg">일평균 {r["avg_week"]}</div></td>'
+                      f'<td class="spark-cell spark-cell-highlight">{spark_week}<div class="spark-avg">일평균 {r["avg_week"]}</div></td>'
                       f'<td class="num base">{r["baseline"]}</td>'
                       f'<td class="num today">{r["today_qty"]}</td><td class="num diff {cls}">{sign}{r["diff"]}</td></tr>')
         return rows or '<tr><td colspan="10" class="empty">해당 없음</td></tr>'
@@ -217,6 +218,7 @@ def build_html(data, zoom=0.92):
   table.data td.tier-cell, table.data td.spark-cell, table.data td.spark-cell-long {{ text-align: center; }}
   table.data svg {{ display: block; margin: 0 auto; }}
   .spark-avg {{ font-size: 7px; color: #999; margin-top: 1px; }}
+  .spark-cell-highlight {{ background: #f5f2ff; border-radius: 4px; }}
   .consist-badge {{ font-size: 7px; font-weight: 700; padding: 0px 4px; border-radius: 6px; margin-left: 3px; display: inline-block; vertical-align: middle; }}
   .consist-badge.consist-down {{ background: #eaf1fe; color: #1a6fd1; }}
   .consist-badge.consist-up {{ background: #feeaea; color: #d1372f; }}
@@ -294,19 +296,19 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section">
-    <h2>급증 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=3개월(90일,연속)/1개월(30일)/지난주(월~일)/2개월(동일요일)/직전7일</span><span class="cnt">{len(spikes)}건</span></h2>
+    <h2>급증 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=2개월(동일요일)/3개월(90일,연속)/1개월(30일)/지난주(월~일)/직전7일(강조·평균기준과 동일)</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:18%"><col style="width:7%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:8%"><col style="width:9%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">직전7일</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {spike_rows}
     </table>
   </div>
 
   <div class="section">
-    <h2>급감 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=3개월(90일,연속)/1개월(30일)/지난주(월~일)/2개월(동일요일)/직전7일{' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
+    <h2>급감 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=2개월(동일요일)/3개월(90일,연속)/1개월(30일)/지난주(월~일)/직전7일(강조·평균기준과 동일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:18%"><col style="width:7%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:8%"><col style="width:9%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">직전7일</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {drop_rows}
     </table>
   </div>
