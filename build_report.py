@@ -273,13 +273,13 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'avg_3mo_sameday': round(sum(trend_3mo_sameday[:-1]) / len(trend_3mo_sameday[:-1]), 1) if len(trend_3mo_sameday) > 1 else 0.0,
                 'avg_last_week': round(sum(last_week_vals) / len(last_week_vals), 1) if last_week_vals else 0.0,
             })
-        # 3개월->1개월->직전주간 평균이 한 방향으로 계속 움직이는지(지속 하락/상승) 보조 신호.
-        # 판정(순위)에는 영향 없음 - "요즘 흐름이 심상치 않을 수 있다"는 참고용 배지일 뿐.
+        # 3개월->1개월->지난주(월~일) 평균이 한 방향으로 계속 움직이는지(지속 하락/상승) 보조 신호.
+        # 판정(순위)에는 영향 없음 - "요즘 흐름이 심상치 않을 수 있다"는 참고용 배지일 뿐. (2개월(동일요일)/직전7일은 이 판정에 사용 안 함)
         for rec in records:
-            a3, a1, aw = rec['avg_3mo'], rec['avg_month'], rec['avg_week']
-            if a3 > a1 > aw:
+            a3, a1, alw = rec['avg_3mo'], rec['avg_month'], rec['avg_last_week']
+            if a3 > a1 > alw:
                 rec['trend_consistency'] = 'down'
-            elif a3 < a1 < aw:
+            elif a3 < a1 < alw:
                 rec['trend_consistency'] = 'up'
             else:
                 rec['trend_consistency'] = None
