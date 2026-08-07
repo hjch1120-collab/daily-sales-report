@@ -188,10 +188,9 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     pivot_month, days_month = _continuous_pivot(29)
     pivot_3mo, days_3mo = _continuous_pivot(89)
 
-    # 3개월(동일요일) 추세: 기준일 이전 90일 이내의 동일 요일 데이터 전부 + 오늘.
-    # 판단 기준인 "평균"과 같은 축(동일 요일)으로 봐서 증감 숫자와 그래프가 일치하는 참고용 추세.
-    past_same_wd_90 = valid[(valid['주문일자'] < report_date) & (valid['주문일자'] >= report_date - pd.Timedelta(days=90)) & (valid['주문일자'].dt.weekday == target_wd)]
-    days_3mo_sameday = sorted(past_same_wd_90['주문일자'].dt.date.unique()) + [report_date.date()]
+    # 2개월(동일요일) 추세: 실제 판정 기준선(baseline) 계산에 쓰인 것과 정확히 같은 9개 날짜 + 오늘.
+    # 판단 기준인 "평균"과 완전히 동일한 축(같은 날짜들)이라, 옆의 평균/기준일/증감 숫자와 그래프가 항상 100% 일치한다.
+    days_3mo_sameday = sorted(same_wd_dates) + [report_date.date()]
     sub_sameday = valid[valid['주문일자'].dt.date.isin(days_3mo_sameday)]
     pivot_3mo_sameday = sub_sameday.pivot_table(index='원품명', columns=sub_sameday['주문일자'].dt.date, values='수량', aggfunc='sum', fill_value=0)
     pivot_3mo_sameday = pivot_3mo_sameday.reindex(columns=days_3mo_sameday, fill_value=0)
@@ -271,7 +270,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'avg_week': round(sum(trend_week) / len(trend_week), 1) if trend_week else 0.0,
                 'avg_month': round(sum(trend_month) / len(trend_month), 1) if trend_month else 0.0,
                 'avg_3mo': round(sum(trend_3mo) / len(trend_3mo), 1) if trend_3mo else 0.0,
-                'avg_3mo_sameday': round(sum(trend_3mo_sameday) / len(trend_3mo_sameday), 1) if trend_3mo_sameday else 0.0,
+                'avg_3mo_sameday': round(sum(trend_3mo_sameday[:-1]) / len(trend_3mo_sameday[:-1]), 1) if len(trend_3mo_sameday) > 1 else 0.0,
                 'avg_last_week': round(sum(last_week_vals) / len(last_week_vals), 1) if last_week_vals else 0.0,
             })
         # 3개월->1개월->직전주간 평균이 한 방향으로 계속 움직이는지(지속 하락/상승) 보조 신호.
