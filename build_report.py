@@ -164,15 +164,8 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     target_wd = report_date.weekday()
     wd_name = WEEKDAY_NAMES[target_wd]
 
-    # 기준선(baseline): 최근 BASELINE_OCCURRENCES회 동일 요일 rolling 평균
-    past_same_wd = valid[(valid['주문일자'] < report_date) & (valid['주문일자'].dt.weekday == target_wd)]
-    same_wd_dates = sorted(past_same_wd['주문일자'].dt.date.unique(), reverse=True)[:BASELINE_OCCURRENCES]
-    n_occ = len(same_wd_dates)
-    baseline_window = valid[valid['주문일자'].dt.date.isin(same_wd_dates)]
-    baseline_all = (baseline_window.groupby('원품명')['수량'].sum() / n_occ) if n_occ else pd.Series(dtype=float)
-
     # 급증/급감 표용 추세 3종 (모두 연속 일자 기준, 동일요일 필터 없음)
-    #  - 직전주간: 기준일 전 7일 + 오늘 (8개 포인트)
+    #  - 직전7일: 기준일 전 7일 + 오늘 (8개 포인트)
     #  - 1개월: 기준일 전 29일 + 오늘 (30개 포인트)
     #  - 3개월: 기준일 전 89일 + 오늘 (90개 포인트)
     def _continuous_pivot(days_back):
@@ -188,15 +181,22 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     pivot_month, days_month = _continuous_pivot(29)
     pivot_3mo, days_3mo = _continuous_pivot(89)
 
-    # 2개월(동일요일) 추세: 실제 판정 기준선(baseline) 계산에 쓰인 것과 정확히 같은 9개 날짜 + 오늘.
-    # 판단 기준인 "평균"과 완전히 동일한 축(같은 날짜들)이라, 옆의 평균/기준일/증감 숫자와 그래프가 항상 100% 일치한다.
+    # 기준선(baseline): 직전7일(오늘 제외) 연속 일평균
+    prevweek_cols = days_week[:-1]  # 오늘을 뺀 7일
+    baseline_all = pivot_week[prevweek_cols].mean(axis=1)
+    n_occ = len(prevweek_cols)  # 표시용(7일)
+
+    # 2개월(동일요일) 추세: 참고용 그래프. 최근 BASELINE_OCCURRENCES회(9회≈2개월) 동일 요일 + 오늘.
+    # (기준선이 직전7일로 바뀌면서, 이 그래프는 더 이상 기준선과 같은 축이 아니라 순수 참고용 비교 자료다.)
+    past_same_wd = valid[(valid['주문일자'] < report_date) & (valid['주문일자'].dt.weekday == target_wd)]
+    same_wd_dates = sorted(past_same_wd['주문일자'].dt.date.unique(), reverse=True)[:BASELINE_OCCURRENCES]
     days_3mo_sameday = sorted(same_wd_dates) + [report_date.date()]
     sub_sameday = valid[valid['주문일자'].dt.date.isin(days_3mo_sameday)]
     pivot_3mo_sameday = sub_sameday.pivot_table(index='원품명', columns=sub_sameday['주문일자'].dt.date, values='수량', aggfunc='sum', fill_value=0)
     pivot_3mo_sameday = pivot_3mo_sameday.reindex(columns=days_3mo_sameday, fill_value=0)
 
     # 지난주(월~일) 캘린더 주 - 참고용 숫자 컬럼 하나(그래프 없음).
-    # "주간 매출 추이" KPI의 지난주와 동일한 개념(월~일 캘린더 주)이며, 급증/급감 표의 "직전주간"(오늘 기준 거꾸로 7일)과는 다른 기간이다.
+    # "주간 매출 추이" KPI의 지난주와 동일한 개념(월~일 캘린더 주)이며, 급증/급감 표의 "직전7일"(오늘 기준 거꾸로 7일)과는 다른 기간이다.
     this_week_monday = report_date - pd.Timedelta(days=report_date.weekday())
     last_week_start = this_week_monday - pd.Timedelta(days=7)
     last_week_end = this_week_monday - pd.Timedelta(days=1)
