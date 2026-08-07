@@ -256,7 +256,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
             trend_month = pivot_month_r.loc[name].astype(int).tolist() if name in pivot_month_r.index else [0] * len(days_month)
             trend_3mo = pivot_3mo_r.loc[name].astype(int).tolist() if name in pivot_3mo_r.index else [0] * len(days_3mo)
             trend_3mo_sameday = pivot_3mo_sameday_r.loc[name].astype(int).tolist() if name in pivot_3mo_sameday_r.index else [0] * len(days_3mo_sameday)
-            last_week_vals = pivot_last_week_r.loc[name].tolist() if name in pivot_last_week_r.index else [0] * len(days_last_week)
+            last_week_vals = [int(v) for v in (pivot_last_week_r.loc[name].tolist() if name in pivot_last_week_r.index else [0] * len(days_last_week))]
             records.append({
                 '원품명': name,
                 'tier': int(r[tier_col]),
@@ -267,6 +267,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'trend_month': trend_month,
                 'trend_3mo': trend_3mo,
                 'trend_3mo_sameday': trend_3mo_sameday,
+                'trend_last_week': last_week_vals,
                 'avg_week': round(sum(trend_week) / len(trend_week), 1) if trend_week else 0.0,
                 'avg_month': round(sum(trend_month) / len(trend_month), 1) if trend_month else 0.0,
                 'avg_3mo': round(sum(trend_3mo) / len(trend_3mo), 1) if trend_3mo else 0.0,
