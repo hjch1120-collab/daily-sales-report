@@ -137,7 +137,7 @@ def build_html(data, zoom=0.92):
                 consist_badge = '<span class="consist-badge consist-up">상승↑</span>'
             else:
                 consist_badge = ''
-            source_tag = '<span class="source-tag">1개월이 더 심각</span>' if month_is_primary else ''
+            source_tag = '<span class="source-tag">1개월평균 기준</span>' if month_is_primary else ''
 
             month_cell_cls = 'spark-cell spark-cell-highlight' if month_is_primary else 'spark-cell'
             month_cell_label = f'<b>순위기준 {r["baseline"]}</b>' if month_is_primary else f'일평균 {r["avg_month"]}'
@@ -312,7 +312,7 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section">
-    <h2>급증 모델 (우선순위)<span class="sub">직전7일 vs 1개월 중 더 심각한 쪽 기준 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일)</span><span class="cnt">{len(spikes)}건</span></h2>
+    <h2>급증 모델 (우선순위)<span class="sub">오늘의 증감을 직전7일평균/1개월평균 두 기준으로 계산해 더 큰 쪽 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일)</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:21%"><col style="width:6%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:14%"><col style="width:8%"><col style="width:9%"></colgroup>
       <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일(=기준평균)</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
@@ -321,7 +321,7 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section">
-    <h2>급감 모델 (우선순위)<span class="sub">직전7일 vs 1개월 중 더 심각한 쪽 기준 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
+    <h2>급감 모델 (우선순위)<span class="sub">오늘의 증감을 직전7일평균/1개월평균 두 기준으로 계산해 더 큰 쪽 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:21%"><col style="width:6%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:14%"><col style="width:8%"><col style="width:9%"></colgroup>
       <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일(=기준평균)</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
