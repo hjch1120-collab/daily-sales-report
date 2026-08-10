@@ -158,12 +158,12 @@ def build_html(data, zoom=0.92):
             # 2개월(동일요일)/직전7일: 그래프 없이 텍스트로만, 순위기준으로 채택된 쪽만 강조
             if month_is_primary:
                 text_cell_cls = 'text-cell'
-                text_cell_html = (f'<div>직전7일 평균 {r["avg_week"]}</div>'
-                                   f'<div class="text-cell-sub">2개월(동일요일) {r["avg_3mo_sameday"]}</div>')
+                text_cell_html = (f'<div>직전7일 : {r["avg_week"]}</div>'
+                                   f'<div class="text-cell-sub">2개월(동일요일) : {r["avg_3mo_sameday"]}</div>')
             else:
                 text_cell_cls = 'text-cell text-cell-highlight'
-                text_cell_html = (f'<div><b>순위기준(직전7일) {r["baseline"]}</b></div>'
-                                   f'<div class="text-cell-sub">2개월(동일요일) {r["avg_3mo_sameday"]}</div>')
+                text_cell_html = (f'<div><b>직전7일 : {r["baseline"]}</b></div>'
+                                   f'<div class="text-cell-sub">2개월(동일요일) : {r["avg_3mo_sameday"]}</div>')
 
             rows += (f'<tr><td class="name">{name_cell(r["원품명"])}{consist_badge}{source_tag}</td>'
                       f'<td class="tier-cell"><span class="tier-badge {cls}">{r["tier"]}순위</span></td>'
@@ -263,7 +263,7 @@ def build_html(data, zoom=0.92):
   .text-cell {{ text-align: center; font-size: 8px; padding: 3px; }}
   .spark-cell-wide {{ text-align: center; }}
   .text-cell-highlight {{ background: #f5f2ff; border-radius: 4px; }}
-  .text-cell-sub {{ color: #999; margin-top: 2px; }}
+  .text-cell-sub {{ color: #bbb; margin-top: 2px; }}
   .consist-badge {{ font-size: 7px; font-weight: 700; padding: 0px 4px; border-radius: 6px; margin-left: 3px; display: inline-block; vertical-align: middle; }}
   .consist-badge.consist-down {{ background: #eaf1fe; color: #1a6fd1; }}
   .consist-badge.consist-up {{ background: #feeaea; color: #d1372f; }}
@@ -338,7 +338,7 @@ def build_html(data, zoom=0.92):
     <h2>급증 모델 (우선순위)<span class="sub">오늘의 증감을 직전7일평균/1개월평균 두 기준으로 계산해 더 큰 쪽 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일)</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:22%"><col style="width:7%"><col style="width:29%"><col style="width:13%"><col style="width:17%"><col style="width:9%"><col style="width:10%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월 추세 (일평균)</th><th style="text-align:center">지난주(월~일)<br>{last_week_range}</th><th style="text-align:center">직전7일 / 2개월(동일요일)</th><th style="text-align:right">기준일({d["date"][5:].replace("-", "/")} {d["weekday"]}요일)</th><th style="text-align:right">증감</th></tr>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월 추세 (일평균)</th><th style="text-align:center">지난주(월~일)<br>{last_week_range}</th><th style="text-align:center">직전7일 / 2개월(동일요일)</th><th style="text-align:right">기준일({d["date"][5:].replace("-", "/")})</th><th style="text-align:right">증감</th></tr>
       {spike_rows}
     </table>
   </div>
@@ -347,7 +347,7 @@ def build_html(data, zoom=0.92):
     <h2>급감 모델 (우선순위)<span class="sub">오늘의 증감을 직전7일평균/1개월평균 두 기준으로 계산해 더 큰 쪽 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:22%"><col style="width:7%"><col style="width:29%"><col style="width:13%"><col style="width:17%"><col style="width:9%"><col style="width:10%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월 추세 (일평균)</th><th style="text-align:center">지난주(월~일)<br>{last_week_range}</th><th style="text-align:center">직전7일 / 2개월(동일요일)</th><th style="text-align:right">기준일({d["date"][5:].replace("-", "/")} {d["weekday"]}요일)</th><th style="text-align:right">증감</th></tr>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월 추세 (일평균)</th><th style="text-align:center">지난주(월~일)<br>{last_week_range}</th><th style="text-align:center">직전7일 / 2개월(동일요일)</th><th style="text-align:right">기준일({d["date"][5:].replace("-", "/")})</th><th style="text-align:right">증감</th></tr>
       {drop_rows}
     </table>
   </div>
@@ -356,7 +356,7 @@ def build_html(data, zoom=0.92):
     <h2 style="border-left-color:#d97706;">🔻 장기 하락세 모델<span class="sub">3개월→2개월→1개월 일평균 15%+연속 하락 · 오늘의 급감모델(직전7일 기준)과는 별개 지표</span><span class="cnt">{len(long_decline_models)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:22%"><col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:15%"><col style="width:15%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:right">3개월 일평균</th><th style="text-align:right">2개월 일평균</th><th style="text-align:right">1개월 일평균</th><th style="text-align:right">기준일({d["date"][5:].replace("-", "/")} {d["weekday"]}요일)</th><th style="text-align:right">단계별 하락률</th></tr>
+      <tr><th>모델명</th><th style="text-align:right">3개월 일평균</th><th style="text-align:right">2개월 일평균</th><th style="text-align:right">1개월 일평균</th><th style="text-align:right">기준일({d["date"][5:].replace("-", "/")})</th><th style="text-align:right">단계별 하락률</th></tr>
       {long_decline_rows}
     </table>
   </div>
