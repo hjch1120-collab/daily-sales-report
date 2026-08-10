@@ -158,6 +158,35 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     prev_month_full = valid[(valid['주문일자'] >= prev_month_start) & (valid['주문일자'] <= prev_month_end)]
     target_key = month_start.strftime('%Y-%m')
     target_revenue = MONTHLY_TARGETS.get(target_key)
+
+    # 예상 이번달 총매출: 과거 완전한 달들의 "N일차까지 진행률" 평균으로 보정
+    data_min_month = valid['주문일자'].min().replace(day=1)
+    days_elapsed = (report_date - month_start).days + 1
+    past_months = []
+    cursor_end = month_start - pd.Timedelta(days=1)
+    while cursor_end.replace(day=1) >= data_min_month:
+        cursor_start = cursor_end.replace(day=1)
+        past_months.append((cursor_start, cursor_end))
+        cursor_end = cursor_start - pd.Timedelta(days=1)
+    past_months.reverse()
+
+    ratios = []
+    for m_start, m_end in past_months:
+        m_df = valid[(valid['주문일자'] >= m_start) & (valid['주문일자'] <= m_end)]
+        m_total = m_df['매출액'].sum()
+        if m_total <= 0:
+            continue
+        cutoff = min(m_start + pd.Timedelta(days=days_elapsed - 1), m_end)
+        td_total = m_df[m_df['주문일자'] <= cutoff]['매출액'].sum()
+        ratios.append(td_total / m_total)
+
+    if ratios:
+        avg_ratio = sum(ratios) / len(ratios)
+        projected_revenue = int(this_month_td['매출액'].sum() / avg_ratio) if avg_ratio > 0 else None
+    else:
+        avg_ratio = None
+        projected_revenue = None
+
     monthly = {
         'range': f"{month_start.strftime('%m/%d')}~{report_date.strftime('%m/%d')}",
         'revenue': int(this_month_td['매출액'].sum()),
@@ -166,6 +195,10 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
         'prev_month_full_revenue': int(prev_month_full['매출액'].sum()),
         'target_revenue': target_revenue,
         'target_pct': _pct(this_month_td['매출액'].sum(), target_revenue) if target_revenue else None,
+        'projected_revenue': projected_revenue,
+        'projection_ratio': round(avg_ratio * 100, 1) if avg_ratio is not None else None,
+        'projection_months': len(ratios),
+        'projected_target_pct': round(projected_revenue / target_revenue * 100, 1) if (projected_revenue and target_revenue) else None,
     }
 
     # ===== 매출수량 섹션 (관리모델 / 신규판매 / 급증·급감 우선순위) =====
