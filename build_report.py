@@ -377,6 +377,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'trend_3mo': trend_3mo,
                 'trend_3mo_sameday': trend_3mo_sameday,
                 'trend_last_week': last_week_vals,
+                'trend_2mo': trend_2mo,
                 'avg_week': round(sum(trend_week[:-1]) / len(trend_week[:-1]), 1) if len(trend_week) > 1 else 0.0,
                 'avg_month': round(sum(trend_month) / len(trend_month), 1) if trend_month else 0.0,
                 'avg_2mo': round(sum(trend_2mo) / len(trend_2mo), 1) if trend_2mo else 0.0,
