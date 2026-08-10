@@ -62,6 +62,7 @@ def build_html(data, zoom=0.92):
     d = data['daily']
     wt = data['weekly_trend']
     mo = data['monthly']
+    report_month_num = int(d['date'].split('-')[1])
     check_models = data.get('check_models', [])
     new_sale = data.get('new_sale', {'silent_60': [], 'gap_30': []})
     spikes = data.get('spikes', [])
@@ -87,10 +88,22 @@ def build_html(data, zoom=0.92):
     if not wt:
         wt_rows = '<tr><td colspan="3" class="empty">데이터 없음</td></tr>'
 
+    proj_html = ""
+    if mo.get('projected_revenue'):
+        proj_html = (
+            f'<div class="meta sub-line">예상 {report_month_num}월 총매출 <b>{krw(mo["projected_revenue"])}</b>'
+            f'<div class="meta-note">(과거 {mo["projection_months"]}개월 평균 진행률 {mo["projection_ratio"]}% 보정)</div></div>'
+        )
+
     if mo.get('target_revenue'):
-        target_html = f'<div class="meta sub-line">목표매출 {krw(mo["target_revenue"])} 대비 {pct_badge(mo["target_pct"])}</div>'
+        if mo.get('projected_target_pct') is not None:
+            pct_val = mo['projected_target_pct']
+            badge = f'<span class="badge {"up" if pct_val >= 100 else "down"}">{"▲" if pct_val >= 100 else "▼"} {pct_val}%</span>'
+            target_html = f'{proj_html}<div class="meta sub-line">목표매출 {krw(mo["target_revenue"])} · 예상 달성률 {badge}</div>'
+        else:
+            target_html = f'{proj_html}<div class="meta sub-line">목표매출 {krw(mo["target_revenue"])} 대비 {pct_badge(mo["target_pct"])}</div>'
     else:
-        target_html = ""
+        target_html = proj_html
 
     def name_cell(name):
         star = '<span class="mstar">★</span>' if name in manage_names else ''
@@ -184,6 +197,17 @@ def build_html(data, zoom=0.92):
   .kpi .value.model-name {{ font-size: 14px; }}
   .kpi .meta {{ font-size: 9.5px; color: #888; margin-top: 3px; }}
   .kpi .meta.sub-line {{ margin-top: 4px; padding-top: 4px; border-top: 1px dashed #e3e3ea; }}
+  .meta-note {{ font-size: 8px; color: #888; margin-top: 2px; font-weight: 400; }}
+  .kpi.kpi-blue {{ border-left: 3px solid #2563eb; background: #eff6ff; }}
+  .kpi.kpi-blue .label {{ border-left-color: #2563eb; }}
+  .kpi.kpi-green {{ border-left: 3px solid #059669; background: #ecfdf5; }}
+  .kpi.kpi-green .label {{ border-left-color: #059669; }}
+  .kpi.kpi-amber {{ border-left: 3px solid #d97706; background: #fffbeb; }}
+  .kpi.kpi-amber .label {{ border-left-color: #d97706; }}
+  .kpi.kpi-indigo {{ border-left: 3px solid #4f46e5; background: #eef2ff; }}
+  .kpi.kpi-indigo .label {{ border-left-color: #4f46e5; }}
+  .kpi.kpi-purple {{ border-left: 3px solid #7c3aed; background: #f5f3ff; }}
+  .kpi.kpi-purple .label {{ border-left-color: #7c3aed; }}
   .monthly-kpi {{ display: flex; flex-direction: column; }}
 
   .mini-table {{ width: 100%; border-collapse: collapse; margin-top: 3px; }}
@@ -257,30 +281,30 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="kpi-row">
-    <div class="kpi">
+    <div class="kpi kpi-blue">
       <div class="label">일간 매출 (전일 대비)</div>
       <div class="value">{krw(d['revenue'])}</div>
       <div class="meta">{pct_badge(d['revenue_pct'])} &nbsp;전일 {krw(d['prev_revenue'])}</div>
       <div class="meta sub-line">{pct_badge(d['prev_sameweekday_revenue_pct'])} &nbsp;전주 {d['prev_sameweekday_weekday']}요일 {krw(d['prev_sameweekday_revenue'])}</div>
     </div>
-    <div class="kpi">
+    <div class="kpi kpi-green">
       <div class="label">일간 판매수량 (전일 대비)</div>
       <div class="value">{d['qty']:,}개</div>
       <div class="meta">{pct_badge(d['qty_pct'])} &nbsp;전일 {d['prev_qty']:,}개</div>
       <div class="meta sub-line">{pct_badge(d['prev_sameweekday_qty_pct'])} &nbsp;전주 {d['prev_sameweekday_weekday']}요일 {d['prev_sameweekday_qty']:,}개</div>
     </div>
-    <div class="kpi">
+    <div class="kpi kpi-amber">
       <div class="label">일간 베스트모델</div>
       {best_model_html}
     </div>
   </div>
 
   <div class="kpi-row">
-    <div class="kpi">
+    <div class="kpi kpi-indigo">
       <div class="label">주간 매출 추이 (최근 3주)</div>
       <table class="mini-table"><tr><th>기간</th><th style="text-align:right">매출액</th><th style="text-align:right">증감</th></tr>{wt_rows}</table>
     </div>
-    <div class="kpi monthly-kpi">
+    <div class="kpi monthly-kpi kpi-purple">
       <div class="label">{mo['range']} 누적매출</div>
       <div class="value">{krw(mo['revenue'])} <span class="qty-inline">· {mo['qty']:,}개</span></div>
       <div class="meta sub-line">전월({mo['prev_month_full_range']}) 총매출 {krw(mo['prev_month_full_revenue'])}</div>
@@ -324,7 +348,7 @@ def build_html(data, zoom=0.92):
     </div>
   </div>
 
-  <div class="footer">&nbsp;</div>
+  <div class="footer" style="text-align:left;">{'예상 달성률 = 예상 총매출 ÷ 목표매출. 예상 총매출은 과거 ' + str(mo['projection_months']) + '개월 평균 진행률로 보정한 값입니다.' if mo.get('projected_revenue') else '&nbsp;'}</div>
 
 </div>
 </body>
