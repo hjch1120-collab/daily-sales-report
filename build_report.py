@@ -223,6 +223,11 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     pivot_2mo, days_2mo = _continuous_pivot(59)
     pivot_3mo, days_3mo = _continuous_pivot(89)
 
+    # 전월(캘린더 월) 모델별 일평균 - 3개월 추세 첫 숫자 색상 비교 기준용
+    prev_cal_month_df = valid[(valid['주문일자'] >= prev_month_start) & (valid['주문일자'] <= prev_month_end)]
+    prev_cal_month_days = (prev_month_end - prev_month_start).days + 1
+    avg_prev_cal_month_all = prev_cal_month_df.groupby('원품명')['수량'].sum() / prev_cal_month_days
+
     # 기준선(baseline): 직전7일(오늘 제외) 연속 일평균
     prevweek_cols = days_week[:-1]  # 오늘을 뺀 7일
     baseline_all = pivot_week[prevweek_cols].mean(axis=1)
@@ -317,15 +322,16 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     gap_30 = sorted((set(base_models) - sold_30) - set(silent_60))
     new_sale = {'silent_60': silent_60, 'gap_30': gap_30}
 
-    # 급증/급감 우선순위: 직전7일 기준과 1개월 기준 중 "더 심각한 쪽"을 채택하는 OR조건.
-    # - 왜 OR조건인가: 직전7일만 쓰면 표본이 적어 노이즈에 민감하고, 1개월만 쓰면 반응이 느리다.
-    #   "이번 주 갑자기 터진 문제"(직전7일이 더 심함)와 "몇 주째 지속되는 문제"(1개월이 더 심함)를
-    #   놓치지 않고 둘 다 잡기 위해, 두 기준 중 더 심각한 쪽의 순위를 채택한다.
-    # - 표시되는 평균/기준일/증감은 채택된 쪽(적용기준)의 실제 숫자이며, 어느 쪽이 채택됐는지도 함께 표시한다.
-    existing = result[(result['baseline'] > 0) | (result['baseline_month'] > 0)].copy()
+    # 급증/급감 우선순위: 현재는 직전7일 단독 기준으로 판정한다.
+    # (OR조건: 직전7일 vs 1개월 중 더 심각한 쪽을 채택하는 방식도 코드로 남겨뒀으나,
+    #  데이터가 더 쌓인 뒤(4개월 이상) 재검토하기로 하고 지금은 USE_OR_CONDITION=False로 비활성화)
+    USE_OR_CONDITION = False
+    existing = result[(result['baseline'] > 0) | (result['baseline_month'] > 0)].copy() if USE_OR_CONDITION else result[result['baseline'] > 0].copy()
 
     def _pick_tier_source(row, tier_func):
         t_week = tier_func(row['diff'])
+        if not USE_OR_CONDITION:
+            return pd.Series({'tier': t_week, 'source': '직전7일', 'used_baseline': row['baseline'], 'used_diff': row['diff']})
         t_month = tier_func(row['diff_month'])
         rank_week = t_week if t_week is not None else 99
         rank_month = t_month if t_month is not None else 99
@@ -384,6 +390,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'avg_3mo': round(sum(trend_3mo) / len(trend_3mo), 1) if trend_3mo else 0.0,
                 'avg_3mo_sameday': round(sum(trend_3mo_sameday[:-1]) / len(trend_3mo_sameday[:-1]), 1) if len(trend_3mo_sameday) > 1 else 0.0,
                 'avg_last_week': round(sum(last_week_vals) / len(last_week_vals), 1) if last_week_vals else 0.0,
+                'avg_prev_cal_month': round(float(avg_prev_cal_month_all.get(name, 0.0)), 1),
             })
         # 3개월->2개월->1개월 일평균(모두 기준일 포함)이 한 방향으로 계속 움직이는지(지속 하락/상승) 보조 신호.
         # 판정(순위)에는 영향 없음 - "최근 몇 달간 흐름이 심상치 않을 수 있다"는 참고용 배지일 뿐.
