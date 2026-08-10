@@ -99,8 +99,6 @@ def build_share_text(data: dict) -> str:
     d = data["daily"]
     wt = data["weekly_trend"]
     mo = data["monthly"]
-    check_models = data.get("check_models", [])
-    manual_check_models = set(data.get("manual_check_models", []))
     spikes = data.get("spikes", [])
     drops = data.get("drops", [])
     new_sale = data.get("new_sale", {"silent_60": [], "gap_30": []})
@@ -135,21 +133,6 @@ def build_share_text(data: dict) -> str:
         tp_txt = f"{tp}%" if tp is not None else "산정 불가"
         s2_lines.append(f"이번달 목표매출 대비 진행률은 {tp_txt}입니다.")
     parts.append("[주간/월누적]\n" + " ".join(s2_lines))
-
-    # ③ 체크모델 (급감1순위 자동 + 직접입력)
-    if check_models:
-        s3_lines = []
-        for m in check_models:
-            tag = "직접입력" if m["원품명"] in manual_check_models else "급감1순위 자동"
-            if m["baseline"] > 0:
-                sign = "증가" if m["diff"] > 0 else ("감소" if m["diff"] < 0 else "동일")
-                s3_lines.append(
-                    f"{m['원품명']}({tag})은(는) 평소 평균 {m['baseline']}개 대비 오늘 {m['today_qty']}개로, "
-                    f"{abs(m['diff'])}개({abs(m['diff_pct']) if m['diff_pct'] is not None else '-'}%) {sign}했습니다."
-                )
-            else:
-                s3_lines.append(f"{m['원품명']}({tag})은(는) 기준평균 데이터가 없어 오늘 {m['today_qty']}개 판매로만 확인됩니다.")
-        parts.append("[체크모델]\n" + " ".join(s3_lines))
 
     # ④ 급증 모델
     if spikes:
@@ -201,9 +184,9 @@ file_kind = st.radio(
 uploaded = st.file_uploader("파일 업로드", type=["csv", "xlsx"])
 
 manage_input = st.text_input(
-    "직접 체크할 모델 (쉼표로 구분, 최대 5개, 예: FRE-465RF, FC-49MSW)",
+    "★ 표시할 모델 (쉼표로 구분, 최대 5개, 예: FRE-465RF, FC-49MSW)",
     value="",
-    help="여기 입력한 모델은 ★체크모델 섹션에 항상 포함됩니다. 급감 1순위 모델(최대 5개)은 입력 안 해도 자동으로 같이 체크모델에 들어갑니다.",
+    help="여기 입력한 모델은 급증/급감/신규판매 모델 표에 등장할 때 이름 옆에 ★ 표시가 붙습니다.",
 )
 manage_models = [m.strip() for m in manage_input.split(",") if m.strip()][:5]
 
@@ -281,7 +264,7 @@ if uploaded is not None:
 
         if page_count > 1:
             st.warning(
-                f"⚠ 오늘은 급증/급감/체크모델 데이터가 많아서 최대한 축소해도(zoom {zoom}) 1페이지에 다 안 들어갔어요. "
+                f"⚠ 오늘은 급증/급감 데이터가 많아서 최대한 축소해도(zoom {zoom}) 1페이지에 다 안 들어갔어요. "
                 f"PDF가 {page_count}페이지로 나왔습니다. (지금 다운로드되는 파일은 1페이지만 포함되어 일부 내용이 잘려 있을 수 있어요.)"
             )
         elif zoom < 0.92:
