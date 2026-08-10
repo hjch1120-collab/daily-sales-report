@@ -68,6 +68,7 @@ def build_html(data, zoom=0.92):
     spikes = data.get('spikes', [])
     drops = data.get('drops', [])
     drops_is_fallback = data.get('drops_is_fallback', False)
+    long_decline_models = data.get('long_decline_models', [])
     wd_name = data.get('baseline_wd_name', '')
     occurrences = data.get('baseline_occurrences', 0)
     long_occ = data.get('long_trend_occurrences', 0)
@@ -142,11 +143,14 @@ def build_html(data, zoom=0.92):
         rows = ""
         highlight_color = '#7c3aed'  # 직전7일: 평균/기준일/증감과 같은 축이라 구분되는 강조색 사용
         for r in records:
+            source = r.get('source', '직전7일')
+            month_is_primary = (source == '1개월')
+
             spark_3mo_sd = sparkline_svg(r['trend_3mo_sameday'], color)
             spark_3mo = sparkline_svg(r['trend_3mo'], color)
-            spark_month = sparkline_svg(r['trend_month'], color)
+            spark_month = sparkline_svg(r['trend_month'], highlight_color if month_is_primary else color)
             spark_lastweek = sparkline_svg(r['trend_last_week'], color)
-            spark_week = sparkline_svg(r['trend_week'], highlight_color)
+            spark_week = sparkline_svg(r['trend_week'], color if month_is_primary else highlight_color)
             sign = '+' if r['diff'] > 0 else ''
             consistency = r.get('trend_consistency')
             if consistency == 'down':
@@ -155,21 +159,37 @@ def build_html(data, zoom=0.92):
                 consist_badge = '<span class="consist-badge consist-up">상승↑</span>'
             else:
                 consist_badge = ''
-            rows += (f'<tr><td class="name">{name_cell(r["원품명"])}{consist_badge}</td>'
+            source_tag = '<span class="source-tag">1개월기준</span>' if month_is_primary else ''
+
+            month_cell_cls = 'spark-cell spark-cell-highlight' if month_is_primary else 'spark-cell'
+            month_cell_label = f'<b>기준평균 {r["baseline"]}</b>' if month_is_primary else f'일평균 {r["avg_month"]}'
+            week_cell_cls = 'spark-cell' if month_is_primary else 'spark-cell spark-cell-highlight'
+            week_cell_label = f'일평균 {r["avg_week"]}' if month_is_primary else f'<b>기준평균 {r["baseline"]}</b>'
+
+            rows += (f'<tr><td class="name">{name_cell(r["원품명"])}{consist_badge}{source_tag}</td>'
                       f'<td class="tier-cell"><span class="tier-badge {cls}">{r["tier"]}순위</span></td>'
                       f'<td class="spark-cell">{spark_3mo_sd}<div class="spark-avg">평균 {r["avg_3mo_sameday"]}</div></td>'
                       f'<td class="spark-cell">{spark_3mo}<div class="spark-avg">일평균 {r["avg_3mo"]}</div></td>'
-                      f'<td class="spark-cell">{spark_month}<div class="spark-avg">일평균 {r["avg_month"]}</div></td>'
+                      f'<td class="{month_cell_cls}">{spark_month}<div class="spark-avg">{month_cell_label}</div></td>'
                       f'<td class="spark-cell">{spark_lastweek}<div class="spark-avg">일평균 {r["avg_last_week"]}</div></td>'
-                      f'<td class="spark-cell spark-cell-highlight">{spark_week}<div class="spark-avg">일평균 {r["avg_week"]}</div></td>'
-                      f'<td class="num base">{r["baseline"]}</td>'
+                      f'<td class="{week_cell_cls}">{spark_week}<div class="spark-avg">{week_cell_label}</div></td>'
                       f'<td class="num today">{r["today_qty"]}</td><td class="num diff {cls}">{sign}{r["diff"]}</td></tr>')
-        return rows or '<tr><td colspan="10" class="empty">해당 없음</td></tr>'
+        return rows or '<tr><td colspan="9" class="empty">해당 없음</td></tr>'
 
 
 
     spike_rows = build_tier_rows(spikes, '#d1372f', 'up-text')
     drop_rows = build_tier_rows(drops, '#1a6fd1', 'down-text')
+
+    long_decline_rows = ""
+    for m in long_decline_models:
+        long_decline_rows += (
+            f'<tr><td class="name">{name_cell(m["원품명"])}</td>'
+            f'<td class="num">{m["avg_3mo"]}</td><td class="num">{m["avg_2mo"]}</td><td class="num">{m["avg_month"]}</td>'
+            f'<td class="num">{m["today_qty"]}</td>'
+            f'<td class="num down-text">-{m["drop1_pct"]}%→-{m["drop2_pct"]}%</td></tr>'
+        )
+    long_decline_rows = long_decline_rows or '<tr><td colspan="6" class="empty">해당 없음</td></tr>'
 
     html = f"""<!DOCTYPE html>
 <html lang="ko">
@@ -246,6 +266,7 @@ def build_html(data, zoom=0.92):
   .consist-badge {{ font-size: 7px; font-weight: 700; padding: 0px 4px; border-radius: 6px; margin-left: 3px; display: inline-block; vertical-align: middle; }}
   .consist-badge.consist-down {{ background: #eaf1fe; color: #1a6fd1; }}
   .consist-badge.consist-up {{ background: #feeaea; color: #d1372f; }}
+  .source-tag {{ font-size: 7px; font-weight: 700; padding: 0px 4px; border-radius: 6px; margin-left: 3px; display: inline-block; vertical-align: middle; background: #fef3c7; color: #92400e; }}
   .up-text {{ color: #d1372f; }}
   .down-text {{ color: #1a6fd1; }}
   table.data tr:last-child td {{ border-bottom: none; }}
@@ -324,8 +345,8 @@ def build_html(data, zoom=0.92):
   <div class="section">
     <h2>급증 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=2개월(동일요일)/3개월(90일,연속)/1개월(30일)/지난주(월~일)/직전7일(강조·평균기준과 동일)</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
-      <colgroup><col style="width:18%"><col style="width:7%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:8%"><col style="width:9%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <colgroup><col style="width:21%"><col style="width:6%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:14%"><col style="width:8%"><col style="width:9%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일(=기준평균)</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {spike_rows}
     </table>
   </div>
@@ -333,9 +354,18 @@ def build_html(data, zoom=0.92):
   <div class="section">
     <h2>급감 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=2개월(동일요일)/3개월(90일,연속)/1개월(30일)/지난주(월~일)/직전7일(강조·평균기준과 동일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
-      <colgroup><col style="width:18%"><col style="width:7%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:8%"><col style="width:9%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일</th><th style="text-align:right">평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      <colgroup><col style="width:21%"><col style="width:6%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:14%"><col style="width:8%"><col style="width:9%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일(=기준평균)</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
       {drop_rows}
+    </table>
+  </div>
+
+  <div class="section" style="border-color:#fbbf24; background:#fffdf5;">
+    <h2 style="border-left-color:#d97706;">🔻 장기 하락세 모델<span class="sub">3개월→2개월→1개월 일평균 15%+연속 하락 · 오늘의 급감모델(직전7일 기준)과는 별개 지표</span><span class="cnt">{len(long_decline_models)}건</span></h2>
+    <table class="data">
+      <colgroup><col style="width:22%"><col style="width:16%"><col style="width:16%"><col style="width:16%"><col style="width:15%"><col style="width:15%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:right">3개월 일평균</th><th style="text-align:right">2개월 일평균</th><th style="text-align:right">1개월 일평균</th><th style="text-align:right">기준일</th><th style="text-align:right">단계별 하락률</th></tr>
+      {long_decline_rows}
     </table>
   </div>
 
