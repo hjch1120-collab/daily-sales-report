@@ -335,7 +335,7 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section">
-    <h2>급증 모델 (우선순위)<span class="sub">오늘의 증감을 직전7일평균/1개월평균 두 기준으로 계산해 더 큰 쪽 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일)</span><span class="cnt">{len(spikes)}건</span></h2>
+    <h2>급증 모델<span class="sub">기준일=오늘 실제 판매량, 직전7일 평균과 비교한 증감 기준 · 상승↑/하락↓ 배지=3개월→2개월→1개월 추세가 계속 같은 방향일 때만 표시(참고용, 순위와 무관)</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:22%"><col style="width:7%"><col style="width:29%"><col style="width:13%"><col style="width:17%"><col style="width:9%"><col style="width:10%"></colgroup>
       <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월 추세 (일평균)</th><th style="text-align:center">지난주(월~일)<br>{last_week_range}</th><th style="text-align:center">직전7일 / 2개월(동일요일)</th><th style="text-align:right">기준일({d["date"][5:].replace("-", "/")})</th><th style="text-align:right">증감</th></tr>
@@ -344,7 +344,7 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section">
-    <h2>급감 모델 (우선순위)<span class="sub">오늘의 증감을 직전7일평균/1개월평균 두 기준으로 계산해 더 큰 쪽 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
+    <h2>급감 모델<span class="sub">기준일=오늘 실제 판매량, 직전7일 평균과 비교한 증감 기준 · 상승↑/하락↓ 배지=3개월→2개월→1개월 추세가 계속 같은 방향일 때만 표시(참고용, 순위와 무관){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:22%"><col style="width:7%"><col style="width:29%"><col style="width:13%"><col style="width:17%"><col style="width:9%"><col style="width:10%"></colgroup>
       <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월 추세 (일평균)</th><th style="text-align:center">지난주(월~일)<br>{last_week_range}</th><th style="text-align:center">직전7일 / 2개월(동일요일)</th><th style="text-align:right">기준일({d["date"][5:].replace("-", "/")})</th><th style="text-align:right">증감</th></tr>
