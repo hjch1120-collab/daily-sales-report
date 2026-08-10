@@ -228,6 +228,10 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     baseline_all = pivot_week[prevweek_cols].mean(axis=1)
     n_occ = len(prevweek_cols)  # 표시용(7일)
 
+    # 보조 기준선: 1개월(오늘 제외 29일) 연속 일평균. 급증/급감 판정에 OR조건으로 함께 사용.
+    prevmonth_cols = days_month[:-1]  # 오늘을 뺀 29일
+    baseline_month_all = pivot_month[prevmonth_cols].mean(axis=1)
+
     # 2개월(동일요일) 추세: 참고용 그래프. 최근 BASELINE_OCCURRENCES회(9회≈2개월) 동일 요일 + 오늘.
     # (기준선이 직전7일로 바뀌면서, 이 그래프는 더 이상 기준선과 같은 축이 아니라 순수 참고용 비교 자료다.)
     past_same_wd = valid[(valid['주문일자'] < report_date) & (valid['주문일자'].dt.weekday == target_wd)]
@@ -259,8 +263,47 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     pivot_3mo_sameday_r = pivot_3mo_sameday.reindex(index=all_models, fill_value=0)
     pivot_last_week_r = pivot_last_week.reindex(index=all_models, fill_value=0)
     diff = today_qty_r - baseline_r
+    baseline_month_r = baseline_month_all.reindex(all_models, fill_value=0.0)
+    diff_month = today_qty_r - baseline_month_r
 
-    result = pd.DataFrame({'baseline': baseline_r.round(1), 'today_qty': today_qty_r, 'diff': diff.round(1)})
+    result = pd.DataFrame({
+        'baseline': baseline_r.round(1), 'today_qty': today_qty_r, 'diff': diff.round(1),
+        'baseline_month': baseline_month_r.round(1), 'diff_month': diff_month.round(1),
+    })
+
+    # 장기 하락세 모델: 오늘 하루의 이상 신호(급감모델)와는 별개로, 수개월째 서서히 판매가 줄어드는 상품을 감지.
+    # 조건: (1) 3개월 일평균 최소 1개/일 이상 (노이즈 컷) (2) 3개월→2개월, 2개월→1개월 각 단계 15%+ 하락
+    #       (3) 오늘 판매량이 1개월 평균 이하(아직 회복 안 된 상태)
+    LONG_DECLINE_MIN_VOLUME = 1.0
+    LONG_DECLINE_MIN_DROP_PCT = 0.15
+    long_models_pool = pivot_3mo.index.union(pivot_2mo.index).union(pivot_month.index)
+    avg_3mo_all = pivot_3mo.reindex(index=long_models_pool, fill_value=0).mean(axis=1)
+    avg_2mo_all = pivot_2mo.reindex(index=long_models_pool, fill_value=0).mean(axis=1)
+    pivot_month_long = pivot_month.reindex(index=long_models_pool, fill_value=0)
+    avg_month_all = pivot_month_long.mean(axis=1)
+    today_from_month = pivot_month_long.iloc[:, -1]
+
+    long_decline_records = []
+    for name in long_models_pool:
+        a3v = float(avg_3mo_all.get(name, 0.0))
+        a2v = float(avg_2mo_all.get(name, 0.0))
+        a1v = float(avg_month_all.get(name, 0.0))
+        tv = float(today_from_month.get(name, 0.0))
+        if a3v < LONG_DECLINE_MIN_VOLUME or a2v <= 0:
+            continue
+        drop1 = (a3v - a2v) / a3v
+        drop2 = (a2v - a1v) / a2v if a2v > 0 else 0
+        if drop1 >= LONG_DECLINE_MIN_DROP_PCT and drop2 >= LONG_DECLINE_MIN_DROP_PCT and tv <= a1v:
+            long_decline_records.append({
+                '원품명': name,
+                'avg_3mo': round(a3v, 2),
+                'avg_2mo': round(a2v, 2),
+                'avg_month': round(a1v, 2),
+                'today_qty': int(round(tv)),
+                'drop1_pct': round(drop1 * 100, 1),
+                'drop2_pct': round(drop2 * 100, 1),
+            })
+    long_decline_models = sorted(long_decline_records, key=lambda r: r['avg_month'])
 
     # 신규 판매 모델 (기준일 판매 발생 모델 중 공백 기간으로 2단계 분류)
     #  - 60일 침묵 모델: 최근 60일간 판매 0건 (신상품일 수도, 오래 방치된 모델일 수도 있음)
@@ -274,24 +317,46 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     gap_30 = sorted((set(base_models) - sold_30) - set(silent_60))
     new_sale = {'silent_60': silent_60, 'gap_30': gap_30}
 
-    # 급증/급감 우선순위 (baseline > 0인 기존 모델 대상)
-    existing = result[result['baseline'] > 0].copy()
-    existing['spike_tier'] = existing['diff'].apply(_spike_tier)
-    existing['drop_tier'] = existing['diff'].apply(_drop_tier)
+    # 급증/급감 우선순위: 직전7일 기준과 1개월 기준 중 "더 심각한 쪽"을 채택하는 OR조건.
+    # - 왜 OR조건인가: 직전7일만 쓰면 표본이 적어 노이즈에 민감하고, 1개월만 쓰면 반응이 느리다.
+    #   "이번 주 갑자기 터진 문제"(직전7일이 더 심함)와 "몇 주째 지속되는 문제"(1개월이 더 심함)를
+    #   놓치지 않고 둘 다 잡기 위해, 두 기준 중 더 심각한 쪽의 순위를 채택한다.
+    # - 표시되는 평균/기준일/증감은 채택된 쪽(적용기준)의 실제 숫자이며, 어느 쪽이 채택됐는지도 함께 표시한다.
+    existing = result[(result['baseline'] > 0) | (result['baseline_month'] > 0)].copy()
 
-    spike_df = existing[existing['spike_tier'].isin([1, 2])].sort_values(['spike_tier', 'diff'], ascending=[True, False]).head(SPIKE_MAX_DISPLAY)
-    drop_df = existing[existing['drop_tier'].isin([1, 2])].sort_values(['drop_tier', 'diff'], ascending=[True, True]).head(MAX_TIER_MODELS)
+    def _pick_tier_source(row, tier_func):
+        t_week = tier_func(row['diff'])
+        t_month = tier_func(row['diff_month'])
+        rank_week = t_week if t_week is not None else 99
+        rank_month = t_month if t_month is not None else 99
+        if rank_week <= rank_month:
+            return pd.Series({'tier': t_week, 'source': '직전7일', 'used_baseline': row['baseline'], 'used_diff': row['diff']})
+        return pd.Series({'tier': t_month, 'source': '1개월', 'used_baseline': row['baseline_month'], 'used_diff': row['diff_month']})
+
+    spike_pick = existing.apply(lambda r: _pick_tier_source(r, _spike_tier), axis=1)
+    drop_pick = existing.apply(lambda r: _pick_tier_source(r, _drop_tier), axis=1)
+    existing['spike_tier'] = spike_pick['tier']
+    existing['spike_source'] = spike_pick['source']
+    existing['spike_baseline'] = spike_pick['used_baseline']
+    existing['spike_diff'] = spike_pick['used_diff']
+    existing['drop_tier'] = drop_pick['tier']
+    existing['drop_source'] = drop_pick['source']
+    existing['drop_baseline'] = drop_pick['used_baseline']
+    existing['drop_diff'] = drop_pick['used_diff']
+
+    spike_df = existing[existing['spike_tier'].isin([1, 2])].sort_values(['spike_tier', 'spike_diff'], ascending=[True, False]).head(SPIKE_MAX_DISPLAY)
+    drop_df = existing[existing['drop_tier'].isin([1, 2])].sort_values(['drop_tier', 'drop_diff'], ascending=[True, True]).head(MAX_TIER_MODELS)
 
     # 급감 1~2순위가 하나도 없는 날: 3순위(-1~-1.9) 중 감소폭이 큰 순서로 최대 DROP_FALLBACK_COUNT개 대체 노출.
     # (완전히 급감 없음으로 비워두기보다, 상대적으로 가장 근접한 모델을 참고용으로 보여주기 위함)
     drops_is_fallback = False
     if len(drop_df) == 0:
-        fallback_df = existing[existing['drop_tier'] == 3].sort_values('diff', ascending=True).head(DROP_FALLBACK_COUNT)
+        fallback_df = existing[existing['drop_tier'] == 3].sort_values('drop_diff', ascending=True).head(DROP_FALLBACK_COUNT)
         if len(fallback_df):
             drop_df = fallback_df
             drops_is_fallback = True
 
-    def _tier_records(df_, tier_col):
+    def _tier_records(df_, tier_col, source_col, baseline_col, diff_col):
         records = []
         for name, r in df_.iterrows():
             trend_week = pivot_week_r.loc[name].astype(int).tolist() if name in pivot_week_r.index else [0] * len(days_week)
@@ -303,9 +368,10 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
             records.append({
                 '원품명': name,
                 'tier': int(r[tier_col]),
-                'baseline': float(r['baseline']),
+                'source': r[source_col],
+                'baseline': float(r[baseline_col]),
                 'today_qty': int(r['today_qty']),
-                'diff': float(r['diff']),
+                'diff': float(r[diff_col]),
                 'trend_week': trend_week,
                 'trend_month': trend_month,
                 'trend_3mo': trend_3mo,
@@ -330,8 +396,8 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 rec['trend_consistency'] = None
         return records
 
-    spikes = _tier_records(spike_df, 'spike_tier')
-    drops = _tier_records(drop_df, 'drop_tier')
+    spikes = _tier_records(spike_df, 'spike_tier', 'spike_source', 'spike_baseline', 'spike_diff')
+    drops = _tier_records(drop_df, 'drop_tier', 'drop_source', 'drop_baseline', 'drop_diff')
 
     # 체크모델: 1순위 = 급감모델 1순위 자동 반영(최대 5개), 2순위 = 직접 입력한 관리모델(최대 5개, 중복 제외).
     # 표시되는 "순위"는 소속 그룹이 아니라 실제 급증/급감 기준(diff)으로 계산한 순위. 기준 미달이면 빈칸.
@@ -387,6 +453,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
         'spikes': spikes,
         'drops': drops,
         'drops_is_fallback': drops_is_fallback,
+        'long_decline_models': long_decline_models,
     }
     return result_dict
 
