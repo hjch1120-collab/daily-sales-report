@@ -139,16 +139,14 @@ def build_html(data, zoom=0.92):
             source_tag = '<span class="source-tag">1개월평균 기준</span>' if month_is_primary else ''
 
             # 3개월 추세 그래프 하나만 넓게 표시, 밑에 순서대로 일평균 숫자만(라벨 없이) 화살표로 나열.
-            # 전 단계 대비 늘었으면 빨강, 줄었으면 파랑, 첫 숫자는 비교대상이 없어 기본색.
+            # 전 단계 대비 늘었으면 빨강, 줄었으면 파랑. 첫 숫자(3개월)는 전월(캘린더 월) 일평균과 비교.
             last_val = r['baseline'] if month_is_primary else r['avg_month']
             seq_vals = [r['avg_3mo'], r['avg_2mo'], last_val]
 
             def _colored(i):
                 v = seq_vals[i]
                 label = f'<b>{v}</b>' if (month_is_primary and i == 2) else f'{v}'
-                if i == 0:
-                    return label
-                prev = seq_vals[i - 1]
+                prev = r['avg_prev_cal_month'] if i == 0 else seq_vals[i - 1]
                 if v > prev:
                     return f'<span class="up-text">{label}</span>'
                 if v < prev:
