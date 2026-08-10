@@ -63,7 +63,6 @@ def build_html(data, zoom=0.92):
     wt = data['weekly_trend']
     mo = data['monthly']
     report_month_num = int(d['date'].split('-')[1])
-    check_models = data.get('check_models', [])
     new_sale = data.get('new_sale', {'silent_60': [], 'gap_30': []})
     spikes = data.get('spikes', [])
     drops = data.get('drops', [])
@@ -110,27 +109,6 @@ def build_html(data, zoom=0.92):
         star = '<span class="mstar">★</span>' if name in manage_names else ''
         return f'{star}{name}'
 
-    # 체크모델 (1순위: 급감 1순위 자동 반영 / 2순위: 직접 입력한 관리모델)
-    # 순위 뱃지는 소속 그룹이 아니라 실제 급증/급감 기준(diff)으로 계산된 순위. 기준 미달이면 빈칸.
-    check_rows = ""
-    for m in check_models:
-        spark = sparkline_svg_long(m['trend60'], m['baseline'], '#7c3aed')
-        diff_v = m['diff']
-        sign = '+' if diff_v > 0 else ''
-        dcls = 'up-text' if diff_v > 0 else ('down-text' if diff_v < 0 else '')
-        star = '★ ' if m['원품명'] in manage_names else ''
-        if m.get('rank_tier'):
-            tier_cls = 'up-text' if m['rank_type'] == 'spike' else 'down-text'
-            tier_badge = f'<span class="tier-badge {tier_cls}">{m["rank_tier"]}순위</span>'
-        else:
-            tier_badge = ''
-        check_rows += (f'<tr><td class="name">{star}{m["원품명"]}</td><td class="tier-cell">{tier_badge}</td>'
-                        f'<td class="spark-cell-long">{spark}</td>'
-                        f'<td class="num base">{m["baseline"]}</td><td class="num today">{m["today_qty"]}</td>'
-                        f'<td class="num diff {dcls}">{sign}{diff_v}</td></tr>')
-    if not check_models:
-        check_rows = '<tr><td colspan="6" class="empty">체크모델 없음</td></tr>'
-
     silent_60 = new_sale.get('silent_60', [])
     gap_30 = new_sale.get('gap_30', [])
     new_sale_total = len(silent_60) + len(gap_30)
@@ -159,12 +137,12 @@ def build_html(data, zoom=0.92):
                 consist_badge = '<span class="consist-badge consist-up">상승↑</span>'
             else:
                 consist_badge = ''
-            source_tag = '<span class="source-tag">1개월기준</span>' if month_is_primary else ''
+            source_tag = '<span class="source-tag">1개월이 더 심각</span>' if month_is_primary else ''
 
             month_cell_cls = 'spark-cell spark-cell-highlight' if month_is_primary else 'spark-cell'
-            month_cell_label = f'<b>기준평균 {r["baseline"]}</b>' if month_is_primary else f'일평균 {r["avg_month"]}'
+            month_cell_label = f'<b>순위기준 {r["baseline"]}</b>' if month_is_primary else f'일평균 {r["avg_month"]}'
             week_cell_cls = 'spark-cell' if month_is_primary else 'spark-cell spark-cell-highlight'
-            week_cell_label = f'일평균 {r["avg_week"]}' if month_is_primary else f'<b>기준평균 {r["baseline"]}</b>'
+            week_cell_label = f'일평균 {r["avg_week"]}' if month_is_primary else f'<b>순위기준 {r["baseline"]}</b>'
 
             rows += (f'<tr><td class="name">{name_cell(r["원품명"])}{consist_badge}{source_tag}</td>'
                       f'<td class="tier-cell"><span class="tier-badge {cls}">{r["tier"]}순위</span></td>'
@@ -333,17 +311,8 @@ def build_html(data, zoom=0.92):
     </div>
   </div>
 
-  <div class="section manage">
-    <h2>★ 체크모델<span class="sub">모델 구성: 급감1순위 자동 + 직접입력 · 순위=실제 급증/급감 기준 · 추세 90일(3개월,일단위)·기준평균은 직전7일 일평균</span><span class="cnt">{len(check_models)}건</span></h2>
-    <table class="data">
-      <colgroup><col style="width:16%"><col style="width:8%"><col style="width:40%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
-      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">추세(3개월)+기준선</th><th style="text-align:right">기준평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
-      {check_rows}
-    </table>
-  </div>
-
   <div class="section">
-    <h2>급증 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=2개월(동일요일)/3개월(90일,연속)/1개월(30일)/지난주(월~일)/직전7일(강조·평균기준과 동일)</span><span class="cnt">{len(spikes)}건</span></h2>
+    <h2>급증 모델 (우선순위)<span class="sub">직전7일 vs 1개월 중 더 심각한 쪽 기준 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일)</span><span class="cnt">{len(spikes)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:21%"><col style="width:6%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:14%"><col style="width:8%"><col style="width:9%"></colgroup>
       <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일(=기준평균)</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
@@ -352,7 +321,7 @@ def build_html(data, zoom=0.92):
   </div>
 
   <div class="section">
-    <h2>급감 모델 (우선순위)<span class="sub">직전 {occurrences}일 일평균 대비 · 추세=2개월(동일요일)/3개월(90일,연속)/1개월(30일)/지난주(월~일)/직전7일(강조·평균기준과 동일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
+    <h2>급감 모델 (우선순위)<span class="sub">직전7일 vs 1개월 중 더 심각한 쪽 기준 채택(강조 표시) · 참고그래프=2개월(동일요일)/3개월(90일,연속)/지난주(월~일){' · 1~2순위 없어 근접 3순위 5건 표시' if drops_is_fallback else ''}</span><span class="cnt">{len(drops)}건</span></h2>
     <table class="data">
       <colgroup><col style="width:21%"><col style="width:6%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:11%"><col style="width:14%"><col style="width:8%"><col style="width:9%"></colgroup>
       <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">2개월(동일요일)</th><th style="text-align:center">3개월</th><th style="text-align:center">1개월</th><th style="text-align:center">지난주(월~일)</th><th style="text-align:center">직전7일(=기준평균)</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
