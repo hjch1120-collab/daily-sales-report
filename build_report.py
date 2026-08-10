@@ -399,46 +399,9 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     spikes = _tier_records(spike_df, 'spike_tier', 'spike_source', 'spike_baseline', 'spike_diff')
     drops = _tier_records(drop_df, 'drop_tier', 'drop_source', 'drop_baseline', 'drop_diff')
 
-    # 체크모델: 1순위 = 급감모델 1순위 자동 반영(최대 5개), 2순위 = 직접 입력한 관리모델(최대 5개, 중복 제외).
-    # 표시되는 "순위"는 소속 그룹이 아니라 실제 급증/급감 기준(diff)으로 계산한 순위. 기준 미달이면 빈칸.
-    # 추세는 90일(3개월) 일단위 - 급증/급감 표의 장기추세(90일) 길이에 맞춤. baseline/평균 계산 기준(2개월 9회)은 변경 없음.
-    auto_check_names = list(drop_df[drop_df['drop_tier'] == 1].index)[:5]
-    manual_check_names = [m for m in manage_models if m not in auto_check_names][:5]
-    check_model_specs = [(n, 1) for n in auto_check_names] + [(n, 2) for n in manual_check_names]
-    check_model_names = [n for n, _ in check_model_specs]
-
-    data_min = valid['주문일자'].min()
-    window_start90 = max(data_min, report_date - pd.Timedelta(days=89))
-    days90 = pd.date_range(window_start90, report_date, freq='D')
-    sub90 = valid[(valid['주문일자'] >= days90[0]) & (valid['주문일자'] <= days90[-1])]
-    pivot90 = sub90.pivot_table(index='원품명', columns='주문일자', values='수량', aggfunc='sum', fill_value=0)
-    pivot90 = pivot90.reindex(index=check_model_names, columns=days90, fill_value=0)
-
-    check_models = []
-    for name, _group in check_model_specs:
-        base_v = float(baseline_all.get(name, 0.0))
-        today_v = int(pivot90.loc[name].iloc[-1]) if name in pivot90.index else 0
-        raw_diff = today_v - base_v
-        diff_v = round(raw_diff, 1)
-        diff_pct = round((raw_diff / base_v * 100), 1) if base_v > 0 else None
-        if diff_v > 0:
-            rank_tier, rank_type = _spike_tier(diff_v), 'spike'
-        elif diff_v < 0:
-            rank_tier, rank_type = _drop_tier(diff_v), 'drop'
-        else:
-            rank_tier, rank_type = None, None
-        if rank_tier is None:
-            rank_type = None
-        check_models.append({
-            '원품명': name,
-            'rank_tier': rank_tier,
-            'rank_type': rank_type,
-            'baseline': round(base_v, 1),
-            'today_qty': today_v,
-            'diff': diff_v,
-            'diff_pct': diff_pct,
-            'trend60': pivot90.loc[name].astype(int).tolist() if name in pivot90.index else [0] * len(days90),
-        })
+    # ★ 표시(신규 판매 모델 등 다른 섹션 강조)용 - 직접 입력한 관리모델 목록만 유지.
+    # (체크모델 섹션 자체는 급증/급감 표에 이미 다 나와서 중복이라 삭제됨)
+    manual_check_names = manage_models[:5]
 
     result_dict = {
         'daily': daily,
@@ -447,7 +410,6 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
         'month_label': month_start.strftime('%Y년 %m월'),
         'baseline_wd_name': wd_name,
         'baseline_occurrences': n_occ,
-        'check_models': check_models,
         'manual_check_models': manual_check_names,  # ★ 표시(다른 섹션 강조)용 - 직접 입력한 모델만
         'new_sale': new_sale,
         'spikes': spikes,
