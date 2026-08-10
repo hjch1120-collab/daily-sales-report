@@ -220,6 +220,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
 
     pivot_week, days_week = _continuous_pivot(7)
     pivot_month, days_month = _continuous_pivot(29)
+    pivot_2mo, days_2mo = _continuous_pivot(59)
     pivot_3mo, days_3mo = _continuous_pivot(89)
 
     # 기준선(baseline): 직전7일(오늘 제외) 연속 일평균
@@ -253,6 +254,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     baseline_r = baseline_all.reindex(all_models, fill_value=0.0)
     pivot_week_r = pivot_week.reindex(index=all_models, fill_value=0)
     pivot_month_r = pivot_month.reindex(index=all_models, fill_value=0)
+    pivot_2mo_r = pivot_2mo.reindex(index=all_models, fill_value=0)
     pivot_3mo_r = pivot_3mo.reindex(index=all_models, fill_value=0)
     pivot_3mo_sameday_r = pivot_3mo_sameday.reindex(index=all_models, fill_value=0)
     pivot_last_week_r = pivot_last_week.reindex(index=all_models, fill_value=0)
@@ -296,6 +298,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
             trend_month = pivot_month_r.loc[name].astype(int).tolist() if name in pivot_month_r.index else [0] * len(days_month)
             trend_3mo = pivot_3mo_r.loc[name].astype(int).tolist() if name in pivot_3mo_r.index else [0] * len(days_3mo)
             trend_3mo_sameday = pivot_3mo_sameday_r.loc[name].astype(int).tolist() if name in pivot_3mo_sameday_r.index else [0] * len(days_3mo_sameday)
+            trend_2mo = pivot_2mo_r.loc[name].astype(int).tolist() if name in pivot_2mo_r.index else [0] * len(days_2mo)
             last_week_vals = [int(v) for v in (pivot_last_week_r.loc[name].tolist() if name in pivot_last_week_r.index else [0] * len(days_last_week))]
             records.append({
                 '원품명': name,
@@ -310,17 +313,18 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
                 'trend_last_week': last_week_vals,
                 'avg_week': round(sum(trend_week[:-1]) / len(trend_week[:-1]), 1) if len(trend_week) > 1 else 0.0,
                 'avg_month': round(sum(trend_month) / len(trend_month), 1) if trend_month else 0.0,
+                'avg_2mo': round(sum(trend_2mo) / len(trend_2mo), 1) if trend_2mo else 0.0,
                 'avg_3mo': round(sum(trend_3mo) / len(trend_3mo), 1) if trend_3mo else 0.0,
                 'avg_3mo_sameday': round(sum(trend_3mo_sameday[:-1]) / len(trend_3mo_sameday[:-1]), 1) if len(trend_3mo_sameday) > 1 else 0.0,
                 'avg_last_week': round(sum(last_week_vals) / len(last_week_vals), 1) if last_week_vals else 0.0,
             })
-        # 3개월->1개월->지난주(월~일) 평균이 한 방향으로 계속 움직이는지(지속 하락/상승) 보조 신호.
-        # 판정(순위)에는 영향 없음 - "요즘 흐름이 심상치 않을 수 있다"는 참고용 배지일 뿐. (2개월(동일요일)/직전7일은 이 판정에 사용 안 함)
+        # 3개월->2개월->1개월 일평균(모두 기준일 포함)이 한 방향으로 계속 움직이는지(지속 하락/상승) 보조 신호.
+        # 판정(순위)에는 영향 없음 - "최근 몇 달간 흐름이 심상치 않을 수 있다"는 참고용 배지일 뿐.
         for rec in records:
-            a3, a1, alw = rec['avg_3mo'], rec['avg_month'], rec['avg_last_week']
-            if a3 > a1 > alw:
+            a3, a2, a1 = rec['avg_3mo'], rec['avg_2mo'], rec['avg_month']
+            if a3 > a2 > a1:
                 rec['trend_consistency'] = 'down'
-            elif a3 < a1 < alw:
+            elif a3 < a2 < a1:
                 rec['trend_consistency'] = 'up'
             else:
                 rec['trend_consistency'] = None
