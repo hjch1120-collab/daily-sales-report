@@ -159,33 +159,13 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     target_key = month_start.strftime('%Y-%m')
     target_revenue = MONTHLY_TARGETS.get(target_key)
 
-    # 예상 이번달 총매출: 과거 완전한 달들의 "N일차까지 진행률" 평균으로 보정
-    data_min_month = valid['주문일자'].min().replace(day=1)
+    # 예상 이번달 총매출: 이번달 자체의 "지금까지 일평균 매출 × 이번달 전체 일수"로 단순 추정.
+    # (과거 달들의 진행률을 끌어와 보정하는 방식은 성수기/비수기 편차가 큰 업종 특성상 오히려 왜곡을 만들 수 있어 배제)
     days_elapsed = (report_date - month_start).days + 1
-    past_months = []
-    cursor_end = month_start - pd.Timedelta(days=1)
-    while cursor_end.replace(day=1) >= data_min_month:
-        cursor_start = cursor_end.replace(day=1)
-        past_months.append((cursor_start, cursor_end))
-        cursor_end = cursor_start - pd.Timedelta(days=1)
-    past_months.reverse()
-
-    ratios = []
-    for m_start, m_end in past_months:
-        m_df = valid[(valid['주문일자'] >= m_start) & (valid['주문일자'] <= m_end)]
-        m_total = m_df['매출액'].sum()
-        if m_total <= 0:
-            continue
-        cutoff = min(m_start + pd.Timedelta(days=days_elapsed - 1), m_end)
-        td_total = m_df[m_df['주문일자'] <= cutoff]['매출액'].sum()
-        ratios.append(td_total / m_total)
-
-    if ratios:
-        avg_ratio = sum(ratios) / len(ratios)
-        projected_revenue = int(this_month_td['매출액'].sum() / avg_ratio) if avg_ratio > 0 else None
-    else:
-        avg_ratio = None
-        projected_revenue = None
+    next_month_start = (month_start + pd.Timedelta(days=32)).replace(day=1)
+    days_in_month = (next_month_start - month_start).days
+    daily_avg_this_month = this_month_td['매출액'].sum() / days_elapsed if days_elapsed > 0 else 0
+    projected_revenue = int(daily_avg_this_month * days_in_month) if daily_avg_this_month > 0 else None
 
     monthly = {
         'range': f"{month_start.strftime('%m/%d')}~{report_date.strftime('%m/%d')}",
@@ -196,8 +176,8 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
         'target_revenue': target_revenue,
         'target_pct': _pct(this_month_td['매출액'].sum(), target_revenue) if target_revenue else None,
         'projected_revenue': projected_revenue,
-        'projection_ratio': round(avg_ratio * 100, 1) if avg_ratio is not None else None,
-        'projection_months': len(ratios),
+        'projection_days_elapsed': days_elapsed,
+        'projection_days_in_month': days_in_month,
         'projected_target_pct': round(projected_revenue / target_revenue * 100, 1) if (projected_revenue and target_revenue) else None,
     }
 
