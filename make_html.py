@@ -94,7 +94,7 @@ def build_html(data, zoom=0.92):
     if mo.get('projected_revenue'):
         proj_html = (
             f'<div class="meta sub-line">예상 {report_month_num}월 총매출 <b>{krw(mo["projected_revenue"])}</b>'
-            f'<div class="meta-note">(과거 {mo["projection_months"]}개월 평균 진행률 {mo["projection_ratio"]}% 보정)</div></div>'
+            f'<div class="meta-note">(이번달 {mo["projection_days_elapsed"]}일간 일평균 × {mo["projection_days_in_month"]}일)</div></div>'
         )
 
     if mo.get('target_revenue'):
@@ -370,7 +370,7 @@ def build_html(data, zoom=0.92):
     </div>
   </div>
 
-  <div class="footer" style="text-align:left;">{'예상 달성률 = 예상 총매출 ÷ 목표매출. 예상 총매출은 과거 ' + str(mo['projection_months']) + '개월 평균 진행률로 보정한 값입니다.' if mo.get('projected_revenue') else '&nbsp;'}</div>
+  <div class="footer" style="text-align:left;">&nbsp;</div>
 
 </div>
 </body>
