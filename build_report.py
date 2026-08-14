@@ -387,8 +387,37 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     spikes = _tier_records(spike_df, 'spike_tier', 'spike_source', 'spike_baseline', 'spike_diff')
     drops = _tier_records(drop_df, 'drop_tier', 'drop_source', 'drop_baseline', 'drop_diff')
 
+    # ★ 체크모델: 직접 입력한 모델만 (순위 조건과 무관하게 항상 고정 표시)
+    check_models = []
+    for name in manage_models[:5]:
+        base_v = float(baseline_r.get(name, 0.0))
+        today_v = int(today_qty_r.get(name, 0))
+        diff_v = round(today_v - base_v, 1)
+        trend_week_c = pivot_week_r.loc[name].astype(int).tolist() if name in pivot_week_r.index else [0] * len(days_week)
+        trend_month_c = pivot_month_r.loc[name].astype(int).tolist() if name in pivot_month_r.index else [0] * len(days_month)
+        trend_3mo_c = pivot_3mo_r.loc[name].astype(int).tolist() if name in pivot_3mo_r.index else [0] * len(days_3mo)
+        trend_3mo_sameday_c = pivot_3mo_sameday_r.loc[name].astype(int).tolist() if name in pivot_3mo_sameday_r.index else [0] * len(days_3mo_sameday)
+        avg_3mo_c = round(sum(trend_3mo_c) / len(trend_3mo_c), 1) if trend_3mo_c else 0.0
+        avg_2mo_c = round(sum(trend_month_c) / len(trend_month_c), 1) if trend_month_c else 0.0  # placeholder, overwritten below
+        trend_2mo_c = pivot_2mo_r.loc[name].astype(int).tolist() if name in pivot_2mo_r.index else [0] * len(days_2mo)
+        avg_2mo_c = round(sum(trend_2mo_c) / len(trend_2mo_c), 1) if trend_2mo_c else 0.0
+        avg_month_c = round(sum(trend_month_c) / len(trend_month_c), 1) if trend_month_c else 0.0
+        tier_v = _spike_tier(diff_v) if diff_v > 0 else (_drop_tier(diff_v) if diff_v < 0 else None)
+        check_models.append({
+            '원품명': name,
+            'baseline': round(base_v, 1),
+            'today_qty': today_v,
+            'diff': diff_v,
+            'tier': tier_v,
+            'tier_type': 'spike' if diff_v > 0 else ('drop' if diff_v < 0 else None),
+            'trend_3mo': trend_3mo_c,
+            'avg_3mo': avg_3mo_c,
+            'avg_2mo': avg_2mo_c,
+            'avg_month': avg_month_c,
+            'avg_prev_cal_month': round(float(avg_prev_cal_month_all.get(name, 0.0)), 1),
+        })
+
     # ★ 표시(신규 판매 모델 등 다른 섹션 강조)용 - 직접 입력한 관리모델 목록만 유지.
-    # (체크모델 섹션 자체는 급증/급감 표에 이미 다 나와서 중복이라 삭제됨)
     manual_check_names = manage_models[:5]
 
     result_dict = {
@@ -399,6 +428,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
         'baseline_wd_name': wd_name,
         'baseline_occurrences': n_occ,
         'manual_check_models': manual_check_names,  # ★ 표시(다른 섹션 강조)용 - 직접 입력한 모델만
+        'check_models': check_models,
         'new_sale': new_sale,
         'spikes': spikes,
         'drops': drops,
