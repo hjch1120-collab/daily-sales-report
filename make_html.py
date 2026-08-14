@@ -74,6 +74,7 @@ def build_html(data, zoom=0.92):
     occurrences = data.get('baseline_occurrences', 0)
     long_occ = data.get('long_trend_occurrences', 0)
     manage_names = set(data.get('manual_check_models', []))
+    check_models = data.get('check_models', [])
 
     bm = d.get('best_model')
     if bm:
@@ -174,6 +175,36 @@ def build_html(data, zoom=0.92):
         return rows or '<tr><td colspan="7" class="empty">해당 없음</td></tr>'
 
 
+
+    check_rows = ""
+    for m in check_models:
+        spark = sparkline_svg(m['trend_3mo'], '#7c3aed', w=150)
+        sign = '+' if m['diff'] > 0 else ''
+        if m.get('tier'):
+            tier_cls = 'up-text' if m['tier_type'] == 'spike' else 'down-text'
+            tier_badge = f'<span class="tier-badge {tier_cls}">{m["tier"]}순위</span>'
+        else:
+            tier_badge = '<span class="tier-badge" style="background:#eee;color:#999;">-</span>'
+        seq_vals = [m['avg_3mo'], m['avg_2mo'], m['avg_month']]
+
+        def _colored_check(i, vals=seq_vals, prev0=m['avg_prev_cal_month']):
+            v = vals[i]
+            prev = prev0 if i == 0 else vals[i - 1]
+            if v > prev:
+                return f'<span class="up-text">{v}</span>'
+            if v < prev:
+                return f'<span class="down-text">{v}</span>'
+            return f'{v}'
+
+        avg_seq = f'{_colored_check(0)} → {_colored_check(1)} → {_colored_check(2)}'
+        diff_cls = 'up-text' if m['diff'] > 0 else ('down-text' if m['diff'] < 0 else '')
+        check_rows += (f'<tr><td class="name">★ {m["원품명"]}</td>'
+                        f'<td class="tier-cell">{tier_badge}</td>'
+                        f'<td class="spark-cell-wide">{spark}<div class="spark-avg">{avg_seq}</div></td>'
+                        f'<td class="num base">{m["baseline"]}</td>'
+                        f'<td class="num today">{m["today_qty"]}</td>'
+                        f'<td class="num diff {diff_cls}">{sign}{m["diff"]}</td></tr>')
+    check_rows = check_rows or '<tr><td colspan="6" class="empty">체크모델 없음 (직접 입력한 모델이 없습니다)</td></tr>'
 
     spike_rows = build_tier_rows(spikes, '#d1372f', 'up-text')
     drop_rows = build_tier_rows(drops, '#1a6fd1', 'down-text')
@@ -332,6 +363,15 @@ def build_html(data, zoom=0.92):
       <div class="meta sub-line">전월({mo['prev_month_full_range']}) 총매출 {krw(mo['prev_month_full_revenue'])}</div>
       {target_html}
     </div>
+  </div>
+
+  <div class="section manage">
+    <h2>★ 체크모델<span class="sub">직접 입력한 모델만 표시 · 기준평균=직전7일 일평균 · 순위는 참고용(급증/급감 표와 동일 기준)</span><span class="cnt">{len(check_models)}건</span></h2>
+    <table class="data">
+      <colgroup><col style="width:22%"><col style="width:13%"><col style="width:29%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>
+      <tr><th>모델명</th><th style="text-align:center">순위</th><th style="text-align:center">3개월 추세 (일평균)</th><th style="text-align:right">직전7일 평균</th><th style="text-align:right">기준일</th><th style="text-align:right">증감</th></tr>
+      {check_rows}
+    </table>
   </div>
 
   <div class="section">
