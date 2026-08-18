@@ -438,6 +438,102 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
     return result_dict
 
 
+def build_weekly(src=SRC, report_date=None, manage_models=None):
+    """
+    주간 대시보드용 (1차 버전 — 추후 다듬을 예정).
+    급증/급감 판정 기준: "이번주(월~기준일) 일평균" vs "직전 4주(28일, 이번주 제외) 일평균"
+    → 일일보고서의 "직전7일 대비" 개념을 주 단위로 확장한 것. 개수 차이(diff) 기준은 동일하게 재사용.
+    """
+    manage_models = manage_models or []
+    df = load(src)
+    valid = df[df['취소일자'].isna()].copy()
+
+    if report_date is None:
+        report_date = valid['주문일자'].max()
+    else:
+        report_date = pd.Timestamp(report_date)
+
+    this_week_monday = report_date - pd.Timedelta(days=report_date.weekday())
+    days_elapsed_this_week = (report_date - this_week_monday).days + 1
+
+    prev_week_start = this_week_monday - pd.Timedelta(days=7)
+    prev_week_end = this_week_monday - pd.Timedelta(days=1)
+
+    this_week_df = valid[(valid['주문일자'] >= this_week_monday) & (valid['주문일자'] <= report_date)]
+    prev_week_df = valid[(valid['주문일자'] >= prev_week_start) & (valid['주문일자'] <= prev_week_end)]
+
+    weekly = {
+        'range': f"{this_week_monday.strftime('%m/%d')}~{report_date.strftime('%m/%d')}",
+        'days_elapsed': days_elapsed_this_week,
+        'revenue': int(this_week_df['매출액'].sum()),
+        'prev_week_revenue': int(prev_week_df['매출액'].sum()),
+        'revenue_pct': _pct(this_week_df['매출액'].sum(), prev_week_df['매출액'].sum()),
+        'qty': int(this_week_df['수량'].sum()),
+        'prev_week_qty': int(prev_week_df['수량'].sum()),
+        'qty_pct': _pct(this_week_df['수량'].sum(), prev_week_df['수량'].sum()),
+    }
+    week_model_qty = this_week_df.groupby('원품명').agg(수량=('수량', 'sum'), 매출액=('매출액', 'sum')).sort_values('수량', ascending=False)
+    if len(week_model_qty):
+        weekly['best_model'] = {
+            '원품명': week_model_qty.index[0],
+            '수량': int(week_model_qty.iloc[0]['수량']),
+            '매출액': float(week_model_qty.iloc[0]['매출액']),
+        }
+    else:
+        weekly['best_model'] = None
+
+    # 기준선(baseline): 직전 4주(28일, 이번주 제외) 연속 일평균
+    baseline_start = this_week_monday - pd.Timedelta(days=28)
+    baseline_end = this_week_monday - pd.Timedelta(days=1)
+    baseline_df = valid[(valid['주문일자'] >= baseline_start) & (valid['주문일자'] <= baseline_end)]
+    baseline_all = baseline_df.groupby('원품명')['수량'].sum() / 28
+
+    this_week_avg_all = this_week_df.groupby('원품명')['수량'].sum() / days_elapsed_this_week if days_elapsed_this_week else pd.Series(dtype=float)
+
+    all_models = baseline_all.index.union(this_week_avg_all.index).union(pd.Index(manage_models))
+    baseline_r = baseline_all.reindex(all_models, fill_value=0.0).round(1)
+    this_week_r = this_week_avg_all.reindex(all_models, fill_value=0.0).round(1)
+    diff = (this_week_r - baseline_r).round(1)
+
+    result = pd.DataFrame({'baseline': baseline_r, 'this_week_avg': this_week_r, 'diff': diff})
+    existing = result[result['baseline'] > 0].copy()
+    existing['spike_tier'] = existing['diff'].apply(_spike_tier)
+    existing['drop_tier'] = existing['diff'].apply(_drop_tier)
+
+    spike_df = existing[existing['spike_tier'].isin([1, 2])].sort_values(['spike_tier', 'diff'], ascending=[True, False]).head(SPIKE_MAX_DISPLAY)
+    drop_df = existing[existing['drop_tier'].isin([1, 2])].sort_values(['drop_tier', 'diff'], ascending=[True, True]).head(MAX_TIER_MODELS)
+
+    drops_is_fallback = False
+    if len(drop_df) == 0:
+        fallback_df = existing[existing['drop_tier'] == 3].sort_values('diff', ascending=True).head(DROP_FALLBACK_COUNT)
+        if len(fallback_df):
+            drop_df = fallback_df
+            drops_is_fallback = True
+
+    def _simple_records(df_, tier_col):
+        records = []
+        for name, r in df_.iterrows():
+            records.append({
+                '원품명': name,
+                'tier': int(r[tier_col]),
+                'baseline': float(r['baseline']),
+                'this_week_avg': float(r['this_week_avg']),
+                'diff': float(r['diff']),
+            })
+        return records
+
+    spikes = _simple_records(spike_df, 'spike_tier')
+    drops = _simple_records(drop_df, 'drop_tier')
+
+    return {
+        'weekly': weekly,
+        'spikes': spikes,
+        'drops': drops,
+        'drops_is_fallback': drops_is_fallback,
+        'baseline_range': f"{baseline_start.strftime('%m/%d')}~{baseline_end.strftime('%m/%d')}",
+    }
+
+
 if __name__ == '__main__':
     # 사용 예시: 매번 채팅에서 지정받은 관리모델 리스트를 manage_models로 전달
     data = build(manage_models=['FRE-465RF', 'FC-49MSW'])
