@@ -188,7 +188,7 @@ manage_input = st.text_input(
     value="",
     help="여기 입력한 모델은 급증/급감/신규판매 모델 표에 등장할 때 이름 옆에 ★ 표시가 붙습니다.",
 )
-manage_models = [m.strip() for m in manage_input.split(",") if m.strip()][:5]
+manage_models = list(dict.fromkeys(m.strip() for m in manage_input.split(",") if m.strip()))[:5]
 
 target_key_hint = date.today().strftime("%Y-%m")
 with st.expander("⚙️ 이번 달 목표매출 설정 (선택)"):
