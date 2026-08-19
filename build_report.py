@@ -238,7 +238,7 @@ def build(src=SRC, report_date=None, send_date=None, manage_models=None):
 
     today_qty_series = today.groupby('원품명')['수량'].sum() if len(today) else pd.Series(dtype=float)
 
-    all_models = pivot_week.index.union(baseline_all.index).union(pd.Index(manage_models))
+    all_models = pivot_week.index.union(baseline_all.index).union(pd.Index(manage_models)).unique()
     today_qty_r = today_qty_series.reindex(all_models, fill_value=0)
     baseline_r = baseline_all.reindex(all_models, fill_value=0.0)
     pivot_week_r = pivot_week.reindex(index=all_models, fill_value=0)
@@ -490,7 +490,7 @@ def build_weekly(src=SRC, report_date=None, manage_models=None):
 
     this_week_avg_all = this_week_df.groupby('원품명')['수량'].sum() / days_elapsed_this_week if days_elapsed_this_week else pd.Series(dtype=float)
 
-    all_models = baseline_all.index.union(this_week_avg_all.index).union(pd.Index(manage_models))
+    all_models = baseline_all.index.union(this_week_avg_all.index).union(pd.Index(manage_models)).unique()
     baseline_r = baseline_all.reindex(all_models, fill_value=0.0).round(1)
     this_week_r = this_week_avg_all.reindex(all_models, fill_value=0.0).round(1)
     diff = (this_week_r - baseline_r).round(1)
