@@ -104,7 +104,7 @@ if uploaded is not None:
         report_date = st.date_input("기준일 (일일/주간 탭 공통)", value=default_date)
     with col_manage:
         manage_input = st.text_input("★ 표시할 모델 (쉼표로 구분, 최대 5개, 일일 탭에 적용)", value="")
-    manage_models = [m.strip() for m in manage_input.split(",") if m.strip()][:5]
+    manage_models = list(dict.fromkeys(m.strip() for m in manage_input.split(",") if m.strip()))[:5]
 
     tab_daily, tab_weekly, tab_monthly = st.tabs(["📄 일일", "📆 주간", "🗓️ 월간 (준비중)"])
 
